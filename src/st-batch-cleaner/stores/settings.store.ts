@@ -1,3 +1,9 @@
+import { klona } from 'klona';
+import _ from 'lodash';
+import { defineStore } from 'pinia';
+import { computed, ref, watch } from 'vue';
+import { z } from 'zod';
+import { getCloudThrottleProfile } from '../core/throttle';
 import type { CloudThrottlePresetId, ThemeMode } from '../types/cleaner';
 
 export const CleanerSettingsSchema = z
@@ -14,19 +20,13 @@ export const CleanerSettingsSchema = z
     viewMode: z.enum(['grid', 'list']).default('grid'),
     /** 云酒馆防抖与节流档位（默认开启云酒馆稳妥模式） */
     cloudThrottlePreset: z.enum(['cloud_safe', 'ultra_stable', 'local_fast']).default('cloud_safe'),
-    /** 快捷方式配置（彻底移除顶部栏，支持悬浮球、魔棒扩展菜单、左下角汉堡菜单自由组合） */
+    /** 快捷方式配置（彻底移除顶部栏与悬浮球，支持魔棒扩展菜单、左下角汉堡菜单与脚本按钮自由组合） */
     shortcuts: z
       .object({
-        /** 可拖拽贴边磁吸悬浮球 */
-        enableFloatingBall: z.boolean().default(true),
         /** 酒馆输入框旁魔棒扩展菜单 (#extensionsMenu) */
         enableMagicWandMenu: z.boolean().default(true),
         /** 酒馆左下角汉堡主菜单 (#options) */
         enableOptionsMenu: z.boolean().default(false),
-        /** 悬浮球停靠侧：left 或 right */
-        floatingBallSide: z.enum(['left', 'right']).default('right'),
-        /** 悬浮球垂直位置百分比 (10 ~ 88) */
-        floatingBallTopPercent: z.number().min(8).max(90).default(68),
       })
       .prefault({}),
     /** 是否已关闭过 iOS 主动添加到主屏幕引导卡片 */
@@ -81,6 +81,11 @@ export const useSettingsStore = defineStore('st-batch-cleaner-settings', () => {
     return settings.value.themeMode;
   });
 
+  /** 当前激活的节流档位配置 */
+  const activeThrottleProfile = computed(() =>
+    getCloudThrottleProfile(settings.value.cloudThrottlePreset),
+  );
+
   /** 一键循环或切换日夜主题 */
   function cycleThemeMode(): void {
     const order: ThemeMode[] = ['light', 'dark', 'auto'];
@@ -96,12 +101,7 @@ export const useSettingsStore = defineStore('st-batch-cleaner-settings', () => {
     settings.value.cloudThrottlePreset = preset;
   }
 
-  function resetFloatingBallPosition(): void {
-    settings.value.shortcuts.floatingBallSide = 'right';
-    settings.value.shortcuts.floatingBallTopPercent = 68;
-  }
-
-  // 防抖写入酒馆脚本变量，避免拖动悬浮球或频繁点击开关时高频读写
+  // 防抖写入酒馆脚本变量，避免频繁点击开关时高频读写
   const persistSettingsDebounced = _.debounce((snapshot: CleanerSettings) => {
     try {
       replaceVariables(snapshot, { type: 'script', script_id: getScriptId() });
@@ -121,10 +121,10 @@ export const useSettingsStore = defineStore('st-batch-cleaner-settings', () => {
   return {
     settings,
     resolvedTheme,
+    activeThrottleProfile,
     cycleThemeMode,
     setThemeMode,
     setThrottlePreset,
-    resetFloatingBallPosition,
   };
 });
 

@@ -1,6 +1,18 @@
-import { buildCharacterDryRunPlan, scanCharacterItems } from '../adapters/character.adapter';
-import { buildPersonaDryRunPlan, scanPersonaItems } from '../adapters/persona.adapter';
-import { buildWorldbookDryRunPlan, scanWorldbookItems } from '../adapters/worldbook.adapter';
+import {
+  buildCharacterDryRunPlan,
+  scanCharacterItems,
+  type CharacterItemMeta,
+} from '../adapters/character.adapter';
+import {
+  buildPersonaDryRunPlan,
+  scanPersonaItems,
+  type PersonaItemMeta,
+} from '../adapters/persona.adapter';
+import {
+  buildWorldbookDryRunPlan,
+  scanWorldbookItems,
+  type WorldbookItemMeta,
+} from '../adapters/worldbook.adapter';
 import type {
   CharacterCascadeOptions,
   CleanableItem,
@@ -37,7 +49,13 @@ export const CLEANER_MODULES: CleanerModuleDefinition[] = [
     supportsGridView: true,
     scan: graph => scanCharacterItems(graph),
     buildDryRun: (items, selectedIds, cascadeOptions, protectFavorites, graph) =>
-      buildCharacterDryRunPlan(items as any, selectedIds, cascadeOptions, protectFavorites, graph),
+      buildCharacterDryRunPlan(
+        items as CleanableItem<CharacterItemMeta>[],
+        selectedIds,
+        cascadeOptions,
+        protectFavorites,
+        graph,
+      ),
   },
   {
     id: 'worldbook',
@@ -48,7 +66,7 @@ export const CLEANER_MODULES: CleanerModuleDefinition[] = [
     supportsGridView: false,
     scan: graph => scanWorldbookItems(graph),
     buildDryRun: (items, selectedIds, _cascadeOptions, _protectFavorites, graph) =>
-      buildWorldbookDryRunPlan(items as any, selectedIds, graph),
+      buildWorldbookDryRunPlan(items as CleanableItem<WorldbookItemMeta>[], selectedIds, graph),
   },
   {
     id: 'persona',
@@ -59,7 +77,7 @@ export const CLEANER_MODULES: CleanerModuleDefinition[] = [
     supportsGridView: true,
     scan: graph => scanPersonaItems(graph),
     buildDryRun: (items, selectedIds, _cascadeOptions, _protectFavorites, graph) =>
-      buildPersonaDryRunPlan(items as any, selectedIds, graph),
+      buildPersonaDryRunPlan(items as CleanableItem<PersonaItemMeta>[], selectedIds, graph),
   },
 ];
 

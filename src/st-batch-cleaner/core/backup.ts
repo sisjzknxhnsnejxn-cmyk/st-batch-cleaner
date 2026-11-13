@@ -1,3 +1,4 @@
+import { klona } from 'klona';
 import type { BackupBundle, BackupRecord, DryRunPlan } from '../types/cleaner';
 
 const yieldToMain = () => new Promise<void>(resolve => setTimeout(resolve, 16));
@@ -146,13 +147,16 @@ function triggerJsonDownload(filename: string, payload: unknown, compact = true)
   const anchor = parentDoc.createElement('a');
   anchor.href = url;
   anchor.download = filename;
+  anchor.rel = 'noopener';
   anchor.style.display = 'none';
   parentDoc.body.appendChild(anchor);
   anchor.click();
 
+  // iOS Safari 在点击下载后会弹出确认对话框，延长至 20 秒释放，防止用户确认前 Blob URL 失效
   setTimeout(() => {
     anchor.remove();
     URL.revokeObjectURL(url);
-  }, 3500);
+  }, 20000);
 }
+
 

@@ -1,45 +1,40 @@
 <template>
-  <div
-    v-if="shouldShow"
-    class="sbc-badge-primary mx-3 mt-2.5 flex flex-wrap items-center justify-between gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:mx-5"
-  >
-    <div class="flex items-start gap-2.5">
+  <div v-if="shouldShowBanner" class="sbc-ios-banner">
+    <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
       <div
-        class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm"
+        style="
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: var(--sbc-accent-soft);
+          color: var(--sbc-accent-text);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        "
       >
-        <SvgIcon name="device_mobile" :size="16" />
+        <SvgIcon name="device_mobile" :size="17" />
       </div>
-      <div class="leading-relaxed">
-        <div class="font-bold">
-          iOS 主动全屏安装建议（防 Safari 内存回收闪退）
-        </div>
-        <div class="mt-0.5 flex flex-wrap items-center gap-1 opacity-90">
-          <span>轻点浏览器底部</span>
-          <span class="inline-flex items-center gap-0.5 rounded bg-indigo-500/20 px-1.5 py-0.5 font-semibold">
-            <SvgIcon name="ios_share" :size="13" />
-            分享
-          </span>
-          <span>按钮，选择</span>
-          <span class="inline-flex items-center gap-0.5 rounded bg-indigo-500/20 px-1.5 py-0.5 font-semibold">
-            <SvgIcon name="plus_square" :size="13" />
-            添加到主屏幕
-          </span>
-          <span>，即可获得独立全屏安全区与更高内存配额。</span>
-        </div>
+      <div style="font-size: 12px; color: var(--sbc-text-secondary)">
+        <strong style="color: var(--sbc-text-primary)">iOS 全屏防断连建议：</strong>
+        点击浏览器底部「分享」→「添加到主屏幕」，可获得更大可视区域并降低云酒馆后台断连概率。
       </div>
     </div>
 
     <button
       type="button"
-      class="sbc-btn-secondary shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold"
-      @click="dismiss"
+      class="sbc-btn sbc-btn-secondary"
+      style="padding: 4px 10px; font-size: 11.5px"
+      @click="settingsStore.settings.iosInstallDismissed = true"
     >
-      我知道了
+      不再提示
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { detectPlatform } from '../../core/platform';
 import { useSettingsStore } from '../../stores/settings.store';
 import SvgIcon from '../icons/SvgIcon.vue';
@@ -47,15 +42,9 @@ import SvgIcon from '../icons/SvgIcon.vue';
 const settingsStore = useSettingsStore();
 const platform = detectPlatform();
 
-/**
- * 在 iOS 非独立全屏模式下主动展示添加到主屏幕引导；
- * 同时可在设置抽屉内随时重新查看
- */
-const shouldShow = computed(() => {
-  return platform.isIOS && !platform.isStandalone && !settingsStore.settings.iosInstallDismissed;
-});
-
-function dismiss(): void {
-  settingsStore.settings.iosInstallDismissed = true;
-}
+const shouldShowBanner = computed(
+  () =>
+    platform.shouldShowIosAddToHomeTip &&
+    !settingsStore.settings.iosInstallDismissed,
+);
 </script>

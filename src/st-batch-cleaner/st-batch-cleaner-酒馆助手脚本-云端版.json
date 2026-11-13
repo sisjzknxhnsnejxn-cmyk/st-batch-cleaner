@@ -4,7 +4,7 @@
   "name": "酒馆资产批量清理中心 (云端版)",
   "enabled": true,
   "content": "import 'https://testingcf.jsdelivr.net/gh/sisjzknxhnsnejxn-cmyk/st-batch-cleaner/dist/st-batch-cleaner/index.js';\n",
-  "info": "🧹 酒馆资产批量清理中心 (st-batch-cleaner v2.0 全平台增强版)\n• 支持角色卡、世界书、用户面具 (Persona) 的可视化批量筛选与安全清理\n• 引用图谱差集防误删：自动保护正在游玩角色/默认面具/全局世界书及跨角色共享资产\n• 角色级联清理：删除角色卡时可选连带清理专属世界书、聊天记录及关联面具\n• 删前一键 JSON 备份导出，支持低内存设备自动体积保护\n• 云酒馆防崩节流护航：三档预设（极速 / 云端均衡 / 防崩安全）+ 429/502/503/504 指数退避重试 + 实时暂停/继续/紧急停止\n• 高对比度日间/夜间双主题 + 三合一无侵入入口（贴边磁吸悬浮球 / 魔棒扩展菜单 / 汉堡主菜单）+ iOS/Android 深度适配\n• 版本类型：官方标准 jsDelivr 云端版（一行 import 自动加载最新 dist 构建结果）\n• 镜像切换提示：若当前网络节点缓存未刷新或连接较慢，可将脚本中的 testingcf.jsdelivr.net 替换为 fastly.jsdelivr.net 或 gcore.jsdelivr.net",
+  "info": "🧹 酒馆资产批量清理中心 (st-batch-cleaner v2.0 全平台增强版)\n• 支持角色卡、世界书、用户面具 (Persona) 的可视化批量筛选与安全清理\n• 引用图谱差集防误删：自动保护正在游玩角色/默认面具/全局世界书及跨角色共享资产\n• 角色级联清理：删除角色卡时可选连带清理专属世界书、聊天记录及关联面具\n• 删前一键 JSON 备份导出，支持低内存设备自动体积保护与 iOS Safari 分享面板导出\n• 云酒馆防崩节流护航：三档预设（极速 / 云端均衡 / 防崩安全）+ 429/502/503/504 指数退避重试 + 实时暂停/继续/紧急停止\n• 高对比度日间/夜间双主题 + 无悬浮球零遮挡入口（魔棒扩展菜单 / 汉堡主菜单 / 脚本按钮）+ iOS/Android 深度触控适配\n• 版本类型：官方标准 jsDelivr 云端版（一行 import 自动加载最新 dist 构建结果）\n• 缓存刷新说明：仓库已配置 GitHub Actions 自动打包并更新版本 Tag（12h 自动刷新主服务器缓存）；如需立即刷新主服务器缓存，可在 https://www.jsdelivr.com/tools/purge 中输入 https://cdn.jsdelivr.net/gh/sisjzknxhnsnejxn-cmyk/st-batch-cleaner/dist/st-batch-cleaner/index.js 确认刷新，或将脚本域名临时替换为 fastly.jsdelivr.net / gcore.jsdelivr.net",
   "button": {
     "enabled": true,
     "buttons": [

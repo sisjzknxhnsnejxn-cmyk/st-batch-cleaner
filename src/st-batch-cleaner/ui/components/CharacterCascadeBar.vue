@@ -1,123 +1,147 @@
 <template>
-  <div class="sbc-surface-muted rounded-xl border px-3.5 py-2.5 text-xs">
-    <!-- 顶部折叠/展开头：在手机端可收起以节省纵向视口空间 -->
-    <div class="flex flex-wrap items-center justify-between gap-2">
+  <section class="sbc-cascade-bar">
+    <!-- 紧凑单行策略概览：点击芯片即可直接切换开关，也可展开高级保护细项 -->
+    <div class="sbc-cascade-summary">
+      <div class="sbc-cascade-chips">
+        <span style="display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--sbc-text-primary); margin-right: 4px">
+          <SvgIcon name="shield" :size="14" style="color: var(--sbc-accent)" />
+          <span>角色清理联动策略:</span>
+        </span>
+
+        <!-- 收藏保护开关芯片 -->
+        <button
+          type="button"
+          class="sbc-policy-chip"
+          :class="{ 'is-gold': settingsStore.settings.protectFavoriteCharacters }"
+          title="点击切换：是否锁定并跳过已收藏角色卡"
+          @click="
+            settingsStore.settings.protectFavoriteCharacters =
+              !settingsStore.settings.protectFavoriteCharacters
+          "
+        >
+          <SvgIcon
+            name="star"
+            :size="12"
+            :filled="settingsStore.settings.protectFavoriteCharacters"
+          />
+          <span>
+            收藏防误删: {{ settingsStore.settings.protectFavoriteCharacters ? '已开启' : '已关闭' }}
+          </span>
+        </button>
+
+        <!-- 连带删除世界书开关芯片 -->
+        <button
+          type="button"
+          class="sbc-policy-chip"
+          :class="{ 'is-on': cascade.deleteLinkedWorldbooks }"
+          title="点击切换：删除角色卡时是否连带删除专属世界书"
+          @click="cascade.deleteLinkedWorldbooks = !cascade.deleteLinkedWorldbooks"
+        >
+          <SvgIcon name="worldbook" :size="12" />
+          <span>连带删世界书: {{ cascade.deleteLinkedWorldbooks ? '开启' : '关闭' }}</span>
+        </button>
+
+        <!-- 连带删除面具开关芯片 -->
+        <button
+          type="button"
+          class="sbc-policy-chip"
+          :class="{ 'is-on': cascade.deleteLinkedPersonas }"
+          title="点击切换：删除角色卡时是否连带处理关联面具"
+          @click="cascade.deleteLinkedPersonas = !cascade.deleteLinkedPersonas"
+        >
+          <SvgIcon name="persona" :size="12" />
+          <span>连带删面具: {{ cascade.deleteLinkedPersonas ? '开启' : '仅解绑' }}</span>
+        </button>
+
+        <!-- 连带删除聊天记录开关芯片 -->
+        <button
+          type="button"
+          class="sbc-policy-chip"
+          :class="{ 'is-on': cascade.deleteChats }"
+          title="点击切换：删除角色卡时是否连带清除历史聊天文件"
+          @click="cascade.deleteChats = !cascade.deleteChats"
+        >
+          <SvgIcon name="chat" :size="12" />
+          <span>连带删聊天: {{ cascade.deleteChats ? '开启' : '保留' }}</span>
+        </button>
+      </div>
+
       <button
         type="button"
-        class="flex items-center gap-1.5 font-bold"
-        style="color: var(--sbc-accent)"
-        @click="isExpanded = !isExpanded"
+        class="sbc-btn sbc-btn-secondary"
+        style="padding: 4px 10px; font-size: 11.5px"
+        @click="expanded = !expanded"
       >
-        <SvgIcon name="link" :size="15" />
-        <span>角色卡专属联动清理策略（三角依赖防护）</span>
-        <span class="sbc-badge-primary ml-1 rounded px-1.5 py-0.5 text-[10px]">
-          {{ isExpanded ? '点击收起' : '点击展开配置' }}
-        </span>
+        <span>{{ expanded ? '收起细项' : '展开智能保护设置' }}</span>
+        <SvgIcon :name="expanded ? 'chevron_up' : 'chevron_down'" :size="13" />
       </button>
-
-      <label
-        class="sbc-badge-amber flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition"
-      >
-        <input
-          v-model="settingsStore.settings.protectFavoriteCharacters"
-          type="checkbox"
-          class="size-3.5 accent-amber-500"
-        />
-        <SvgIcon name="star" :size="13" filled />
-        <span>保护已收藏角色</span>
-      </label>
     </div>
 
-    <div v-if="isExpanded" class="mt-2.5 grid grid-cols-1 gap-2 md:grid-cols-3">
-      <!-- 联动世界书 -->
-      <div class="sbc-surface-elevated flex flex-col gap-1.5 rounded-lg border p-2.5">
-        <label class="flex cursor-pointer items-center gap-2 font-bold">
-          <input
-            v-model="settingsStore.settings.characterCascade.deleteLinkedWorldbooks"
-            type="checkbox"
-            class="size-3.5 accent-indigo-600"
-          />
-          <SvgIcon name="worldbook" :size="15" style="color: var(--sbc-accent)" />
-          <span>连带删除绑定世界书</span>
+    <!-- 展开后的三列智能保护详情卡片 -->
+    <div v-if="expanded" class="sbc-cascade-grid">
+      <div class="sbc-cascade-card">
+        <label class="sbc-check-label">
+          <input v-model="cascade.deleteLinkedWorldbooks" type="checkbox" />
+          <div>
+            <div style="font-weight: 700">连带删除绑定的主/附加世界书</div>
+            <div style="font-size: 11px; color: var(--sbc-text-muted)">
+              自动扫描角色卡绑定的 Primary 与 Additional Lorebooks
+            </div>
+          </div>
         </label>
         <label
-          v-if="settingsStore.settings.characterCascade.deleteLinkedWorldbooks"
-          class="ml-5 flex cursor-pointer items-center gap-1.5 text-[11px] font-medium"
-          style="color: var(--sbc-emerald-text)"
+          v-if="cascade.deleteLinkedWorldbooks"
+          class="sbc-check-label"
+          style="padding-left: 22px; color: var(--sbc-emerald-text)"
         >
-          <input
-            v-model="settingsStore.settings.characterCascade.protectSharedWorldbooks"
-            type="checkbox"
-            class="size-3 accent-emerald-600"
-          />
-          <SvgIcon name="shield" :size="12" />
-          <span>智能保护被其他存活角色/全局共用的世界书</span>
+          <input v-model="cascade.protectSharedWorldbooks" type="checkbox" />
+          <span>智能保护：被其他未删角色、全局或面具共用的世界书自动跳过不删</span>
         </label>
-        <p v-else class="ml-5 text-[11px]" style="color: var(--sbc-text-muted)">
-          不勾选时仅删除角色卡本体，保留主世界书与附加世界书
-        </p>
       </div>
 
-      <!-- 联动面具 -->
-      <div class="sbc-surface-elevated flex flex-col gap-1.5 rounded-lg border p-2.5">
-        <label class="flex cursor-pointer items-center gap-2 font-bold">
-          <input
-            v-model="settingsStore.settings.characterCascade.deleteLinkedPersonas"
-            type="checkbox"
-            class="size-3.5 accent-indigo-600"
-          />
-          <SvgIcon name="persona" :size="15" style="color: var(--sbc-amber-text)" />
-          <span>连带删除专属用户面具</span>
+      <div class="sbc-cascade-card">
+        <label class="sbc-check-label">
+          <input v-model="cascade.deleteLinkedPersonas" type="checkbox" />
+          <div>
+            <div style="font-weight: 700">连带删除专属关联面具 (Persona)</div>
+            <div style="font-size: 11px; color: var(--sbc-text-muted)">
+              未开启时也会自动清理存活面具里的失效角色绑定记录
+            </div>
+          </div>
         </label>
         <label
-          v-if="settingsStore.settings.characterCascade.deleteLinkedPersonas"
-          class="ml-5 flex cursor-pointer items-center gap-1.5 text-[11px] font-medium"
-          style="color: var(--sbc-emerald-text)"
+          v-if="cascade.deleteLinkedPersonas"
+          class="sbc-check-label"
+          style="padding-left: 22px; color: var(--sbc-emerald-text)"
         >
-          <input
-            v-model="settingsStore.settings.characterCascade.protectSharedPersonas"
-            type="checkbox"
-            class="size-3 accent-emerald-600"
-          />
-          <SvgIcon name="shield" :size="12" />
-          <span>保护默认/多角色共用面具（仅解绑不删）</span>
+          <input v-model="cascade.protectSharedPersonas" type="checkbox" />
+          <span>智能保护：默认面具、当前佩戴面具或多角色共用面具仅解绑不删除</span>
         </label>
-        <p v-else class="ml-5 text-[11px]" style="color: var(--sbc-text-muted)">
-          不删面具，但会自动清理面具内指向已删角色的残留死链
-        </p>
       </div>
 
-      <!-- 联动聊天记录 -->
-      <div class="sbc-surface-elevated flex flex-col gap-1.5 rounded-lg border p-2.5">
-        <label class="flex cursor-pointer items-center gap-2 font-bold">
-          <input
-            v-model="settingsStore.settings.characterCascade.deleteChats"
-            type="checkbox"
-            class="size-3.5 accent-indigo-600"
-          />
-          <SvgIcon name="chat" :size="15" style="color: var(--sbc-accent)" />
-          <span>连带清理全部聊天历史文件</span>
+      <div class="sbc-cascade-card">
+        <label class="sbc-check-label">
+          <input v-model="cascade.deleteChats" type="checkbox" />
+          <div>
+            <div style="font-weight: 700">同时彻底删除历史聊天记录文件</div>
+            <div style="font-size: 11px; color: var(--sbc-text-muted)">
+              一并清理该角色卡名下的全部 .jsonl 聊天存档，释放云端存储空间
+            </div>
+          </div>
         </label>
-        <p class="ml-5 text-[11px]" style="color: var(--sbc-text-muted)">
-          {{
-            settingsStore.settings.characterCascade.deleteChats
-              ? '彻底删除该角色卡名下的所有历史聊天记录 (.jsonl)'
-              : '保留磁盘上的历史聊天记录文件，仅移除角色卡'
-          }}
-        </p>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { detectPlatform } from '../../core/platform';
+import { ref, toRef } from 'vue';
 import { useSettingsStore } from '../../stores/settings.store';
 import SvgIcon from '../icons/SvgIcon.vue';
 
 const settingsStore = useSettingsStore();
-const platform = detectPlatform();
-// 手机端默认收起二级联动详情以留出更大卡片列表视野，点击可随时展开
-const isExpanded = ref(!platform.isMobileViewport);
-</script>
+const cascade = toRef(settingsStore.settings, 'characterCascade');
 
+// 默认折叠，最大化下方资产列表可视面积
+const expanded = ref(false);
+</script>

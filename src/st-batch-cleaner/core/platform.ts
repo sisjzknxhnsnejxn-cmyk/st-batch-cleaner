@@ -14,6 +14,8 @@ export interface PlatformInfo {
   isStandalone: boolean;
   /** 是否为 Safari 浏览器内核 */
   isSafari: boolean;
+  /** 是否应展示 iOS 添加到主屏幕防断连提示条 */
+  shouldShowIosAddToHomeTip: boolean;
   /** 设备可读名称（用于在界面上展示当前适配状态） */
   deviceLabel: string;
 }
@@ -22,14 +24,18 @@ export interface PlatformInfo {
  * 探测当前运行平台信息（优先基于酒馆外层 parent 窗口）
  */
 export function detectPlatform(): PlatformInfo {
-  const win = (window.parent ?? window) as Window & { navigator: Navigator & { standalone?: boolean } };
+  const win = (window.parent ?? window) as Window & {
+    navigator: Navigator & { standalone?: boolean };
+  };
   const nav = win.navigator;
   const ua = nav.userAgent || '';
 
   // iPhone / iPod / iPad 或 iPadOS 13+ 桌面模式伪装 (MacIntel + 多点触控)
   const isIOS =
     /iPad|iPhone|iPod/i.test(ua) ||
-    (nav.platform === 'MacIntel' && typeof nav.maxTouchPoints === 'number' && nav.maxTouchPoints > 1);
+    (nav.platform === 'MacIntel' &&
+      typeof nav.maxTouchPoints === 'number' &&
+      nav.maxTouchPoints > 1);
 
   const isAndroid = /Android/i.test(ua);
 
@@ -59,6 +65,7 @@ export function detectPlatform(): PlatformInfo {
     isMobile,
     isStandalone,
     isSafari,
+    shouldShowIosAddToHomeTip: isIOS && !isStandalone,
     deviceLabel,
   };
 }
@@ -98,3 +105,4 @@ export function installIosWebAppEnhancements(parentDoc: Document = window.parent
     console.warn('[st-batch-cleaner] 注入 iOS 主动安装元标签警告:', err);
   }
 }
+

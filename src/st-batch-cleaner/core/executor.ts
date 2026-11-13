@@ -14,6 +14,8 @@ export interface ExecutePlanOptions {
   cascadeOptions: CharacterCascadeOptions;
   /** 用户是否点击了中途安全停止 */
   shouldAbort?: () => boolean;
+  /** 用户是否点击了暂停 */
+  shouldPause?: () => boolean;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -84,6 +86,7 @@ export async function executeDryRunPlan(
 
   onProgressUpdate(p => {
     p.running = true;
+    p.paused = false;
     p.abortRequested = false;
     p.phase = 'backing_up';
     p.currentStep = 0;
@@ -103,8 +106,28 @@ export async function executeDryRunPlan(
   let writeOpsCounter = 0;
 
   const isAborted = (): boolean => Boolean(options.shouldAbort?.());
+  const isPaused = (): boolean => Boolean(options.shouldPause?.());
+
+  const waitWhilePaused = async () => {
+    if (!isPaused() || isAborted()) return;
+    appendLog('info', '⏸ 任务已暂停，等待继续...');
+    onProgressUpdate(p => {
+      p.paused = true;
+    });
+    while (isPaused() && !isAborted()) {
+      await sleep(160);
+    }
+    onProgressUpdate(p => {
+      p.paused = false;
+    });
+    if (!isAborted()) {
+      appendLog('info', '▶ 任务已继续执行');
+    }
+  };
 
   const applyThrottleAndCooldown = async () => {
+    await waitWhilePaused();
+    if (isAborted()) return;
     writeOpsCounter++;
     if (writeOpsCounter % profile.batchSize === 0) {
       onProgressUpdate(p => {
@@ -176,6 +199,7 @@ export async function executeDryRunPlan(
     );
 
     for (const unbind of cascadeUnbinds) {
+      await waitWhilePaused();
       if (isAborted()) break;
       stepAdvance(`解绑面具关联: ${unbind.name}`, 'unbinding');
       if (unbind.moduleId === 'persona') {
@@ -204,6 +228,7 @@ export async function executeDryRunPlan(
     }
 
     for (const item of plan.primaryDeletes) {
+      await waitWhilePaused();
       if (isAborted()) {
         appendLog('warn', '用户点击了安全停止，已跳过剩余未删除的主项目。');
         break;
@@ -242,6 +267,7 @@ export async function executeDryRunPlan(
 
     if (!isAborted()) {
       for (const cascade of cascadeDeletes) {
+        await waitWhilePaused();
         if (isAborted()) {
           appendLog('warn', '用户点击了安全停止，已跳过剩余附属资产。');
           break;

@@ -1,318 +1,285 @@
 <template>
   <div
     v-if="cleanerStore.isConfirmModalOpen"
-    class="sbc-backdrop fixed inset-0 z-[10001] flex items-center justify-center p-3 sm:p-4"
+    class="sbc-submodal-backdrop"
+    @click.self="handleClose"
   >
-    <div
-      class="sbc-panel flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border"
-    >
-      <!-- 头部 -->
-      <div class="sbc-surface-elevated flex items-center justify-between border-b px-4 py-3.5 sm:px-5 sm:py-4">
-        <div class="flex items-center gap-2.5">
-          <div class="sbc-badge-rose flex size-9 shrink-0 items-center justify-center rounded-xl">
-            <SvgIcon name="warning" :size="20" />
+    <div class="sbc-submodal-card">
+      <!-- 顶部标题 -->
+      <header class="sbc-header">
+        <div class="sbc-header-brand">
+          <div
+            class="sbc-brand-logo"
+            style="background: linear-gradient(135deg, var(--sbc-danger) 0%, #be123c 100%)"
+          >
+            <SvgIcon name="shield" :size="18" />
           </div>
-          <div>
-            <h3 class="text-sm font-bold sm:text-base">清理前影响清单与安全确认 (Dry-Run)</h3>
-            <p class="text-[11px] sm:text-xs" style="color: var(--sbc-text-secondary)">
-              请核对即将删除的主项、连带清理项以及被智能保护自动保留的项目
+          <div class="sbc-brand-text">
+            <h3 class="sbc-brand-title">安全删除预演 (Dry-Run) 与执行进度</h3>
+            <p class="sbc-brand-sub">
+              执行前请核对删除清单；支持一键删前 JSON 备份、云酒馆分批节流与中途随时停止
             </p>
           </div>
         </div>
+
         <button
+          v-if="!progress.running"
           type="button"
-          :disabled="cleanerStore.progress.running"
-          class="sbc-btn-secondary sbc-touch-target flex size-8 items-center justify-center rounded-lg disabled:opacity-40"
-          @click="cleanerStore.isConfirmModalOpen = false"
+          class="sbc-btn-icon sbc-btn-secondary"
+          title="关闭预演窗口"
+          @click="handleClose"
         >
-          <SvgIcon name="close" :size="18" />
+          <SvgIcon name="close" :size="16" />
         </button>
-      </div>
+      </header>
 
-      <!-- 主体内容 -->
-      <div class="sbc-scroll-area flex-1 space-y-3.5 p-4 text-xs sm:p-5">
-        <div
-          v-for="(warn, wIdx) in plan.warnings"
-          :key="wIdx"
-          class="sbc-badge-amber flex items-start gap-2 rounded-xl p-3 font-medium"
-        >
-          <SvgIcon name="warning" :size="16" class="mt-0.5 shrink-0" />
-          <span>{{ warn }}</span>
-        </div>
+      <!-- 主体区域 -->
+      <div class="sbc-list-viewport" style="display: flex; flex-direction: column; gap: 12px">
+        <!-- 统计卡片 -->
+        <div class="sbc-stat-grid">
+          <div class="sbc-stat-box">
+            <div style="font-size: 11px; color: var(--sbc-text-muted); font-weight: 600">
+              主清理项目 ({{ cleanerStore.activeModule.title }})
+            </div>
+            <div class="sbc-stat-num" style="color: var(--sbc-danger-text)">
+              {{ plan.primaryDeletes.length }}
+            </div>
+          </div>
 
-        <div class="grid grid-cols-3 gap-2.5">
-          <div class="sbc-badge-rose rounded-xl p-3">
-            <div class="text-[11px] opacity-85">直接删除主项</div>
-            <div class="mt-1 text-lg font-extrabold sm:text-xl">{{ plan.primaryDeletes.length }} 项</div>
+          <div class="sbc-stat-box">
+            <div style="font-size: 11px; color: var(--sbc-text-muted); font-weight: 600">
+              连带删除附属资源
+            </div>
+            <div class="sbc-stat-num" style="color: var(--sbc-amber-text)">
+              {{ cascadeDeleteItems.length }}
+            </div>
           </div>
-          <div class="sbc-badge-amber rounded-xl p-3">
-            <div class="text-[11px] opacity-85">连带删除附属项</div>
-            <div class="mt-1 text-lg font-extrabold sm:text-xl">{{ cascadeDeletes.length }} 项</div>
-          </div>
-          <div class="sbc-badge-emerald rounded-xl p-3">
-            <div class="text-[11px] opacity-85">智能保护/仅解绑</div>
-            <div class="mt-1 text-lg font-extrabold sm:text-xl">
-              {{ cascadeProtectedOrUnbind.length + plan.skippedPrimary.length }} 项
+
+          <div class="sbc-stat-box">
+            <div style="font-size: 11px; color: var(--sbc-text-muted); font-weight: 600">
+              受保护/仅解绑跳过
+            </div>
+            <div class="sbc-stat-num" style="color: var(--sbc-emerald-text)">
+              {{ cascadeProtectedItems.length + plan.skippedPrimary.length }}
             </div>
           </div>
         </div>
 
-        <div class="sbc-surface-muted rounded-xl border p-3.5">
+        <!-- 警告提示 -->
+        <div
+          v-if="plan.warnings.length > 0"
+          class="sbc-section-box"
+          style="background: var(--sbc-warning-soft); border-color: var(--sbc-warning-border)"
+        >
           <div
-            class="mb-2 flex items-center gap-1.5 font-bold"
-            style="color: var(--sbc-rose-text)"
+            v-for="(w, i) in plan.warnings"
+            :key="i"
+            style="display: flex; align-items: flex-start; gap: 8px; color: var(--sbc-warning-text); font-size: 12px"
           >
-            <SvgIcon name="trash" :size="14" />
-            <span>即将删除的{{ cleanerStore.activeModule.shortTitle }} ({{ plan.primaryDeletes.length }})</span>
+            <SvgIcon name="warning" :size="15" style="margin-top: 2px" />
+            <span>{{ w }}</span>
           </div>
-          <div class="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
-            <span
-              v-for="item in plan.primaryDeletes"
-              :key="item.id"
-              class="sbc-badge-rose inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium"
-            >
-              <span>{{ item.name }}</span>
-              <span class="text-[10px] opacity-75">({{ item.id }})</span>
+        </div>
+
+        <!-- 执行前配置摘要 + 清单明细 -->
+        <template v-if="!progress.running && progress.phase === 'idle'">
+          <div class="sbc-section-box" style="flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap">
+            <label class="sbc-check-label" style="align-items: center">
+              <input v-model="settingsStore.settings.backupBeforeDelete" type="checkbox" />
+              <span style="font-weight: 700">
+                删除前自动打包并下载 JSON 备份文件（强烈推荐开启）
+              </span>
+            </label>
+            <span class="sbc-badge sbc-badge-primary">
+              <SvgIcon name="cloud" :size="11" />
+              <span>{{ settingsStore.activeThrottleProfile.name }}</span>
             </span>
           </div>
-        </div>
 
-
-        <div
-          v-if="cascadeDeletes.length > 0"
-          class="sbc-surface-muted rounded-xl border p-3.5"
-        >
-          <div
-            class="mb-2 flex items-center gap-1.5 font-bold"
-            style="color: var(--sbc-amber-text)"
-          >
-            <SvgIcon name="link" :size="14" />
-            <span>即将连带删除的关联资产 ({{ cascadeDeletes.length }})</span>
-          </div>
-          <div class="max-h-32 space-y-1.5 overflow-y-auto">
-            <div
-              v-for="c in cascadeDeletes"
-              :key="`${c.moduleId}:${c.id}`"
-              class="sbc-badge-amber flex items-center justify-between rounded-lg px-2.5 py-1.5"
-            >
-              <span class="font-bold">[{{ moduleLabel(c.moduleId) }}] {{ c.name }}</span>
-              <span class="text-[11px] opacity-85">{{ c.reason }}</span>
+          <!-- 待删除主项目列表 -->
+          <div class="sbc-section-box">
+            <div style="font-weight: 700; font-size: 12.5px">
+              即将物理删除的主项目 ({{ plan.primaryDeletes.length }})
             </div>
-          </div>
-        </div>
-
-
-        <div
-          v-if="cascadeProtectedOrUnbind.length > 0 || plan.skippedPrimary.length > 0"
-          class="sbc-surface-muted rounded-xl border p-3.5"
-        >
-          <div
-            class="mb-2 flex items-center gap-1.5 font-bold"
-            style="color: var(--sbc-emerald-text)"
-          >
-            <SvgIcon name="shield" :size="14" />
-            <span>智能防误删保护清单（不会删除实体）</span>
-          </div>
-          <div class="max-h-32 space-y-1.5 overflow-y-auto">
-            <div
-              v-for="s in plan.skippedPrimary"
-              :key="`skip:${s.item.id}`"
-              class="sbc-badge-emerald flex items-center justify-between rounded-lg px-2.5 py-1.5"
-            >
-              <span class="font-bold">{{ s.item.name }}</span>
-              <span class="text-[11px] opacity-90">{{ s.reason }}</span>
-            </div>
-            <div
-              v-for="c in cascadeProtectedOrUnbind"
-              :key="`prot:${c.moduleId}:${c.id}`"
-              class="sbc-badge-emerald flex items-center justify-between rounded-lg px-2.5 py-1.5"
-            >
-              <span class="font-bold">[{{ moduleLabel(c.moduleId) }}] {{ c.name }}</span>
-              <span class="text-[11px] opacity-90">{{ c.reason }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 备份与云酒馆防崩节流切换条 -->
-        <div class="sbc-badge-primary space-y-2.5 rounded-xl p-3.5">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <label class="flex cursor-pointer items-center gap-2.5 font-bold">
-              <input
-                v-model="settingsStore.settings.backupBeforeDelete"
-                type="checkbox"
-                :disabled="cleanerStore.progress.running"
-                class="size-4 accent-indigo-600"
-              />
-              <span>删除前自动打包下载 JSON 备份文件（强烈推荐）</span>
-            </label>
-            <button
-              type="button"
-              :disabled="cleanerStore.progress.running"
-              class="sbc-btn-secondary inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold disabled:opacity-40"
-              @click="cleanerStore.downloadBackupOnly()"
-            >
-              <SvgIcon name="download" :size="13" />
-              <span>仅导出备份</span>
-            </button>
-          </div>
-
-          <div class="flex flex-wrap items-center justify-between gap-2 border-t pt-2" style="border-color: var(--sbc-border)">
-            <div class="flex items-center gap-1.5 text-[11px] font-semibold">
-              <SvgIcon name="cloud" :size="14" />
-              <span>当前护航速度：{{ settingsStore.activeThrottleProfile.name }}</span>
-            </div>
-            <div class="flex items-center gap-1">
-              <button
-                v-for="p in throttleList"
-                :key="p.id"
-                type="button"
-                :disabled="cleanerStore.progress.running"
-                class="rounded-md px-2 py-0.5 text-[11px] font-bold transition disabled:opacity-40"
-                :class="
-                  settingsStore.settings.cloudThrottlePreset === p.id
-                    ? 'sbc-btn-primary'
-                    : 'sbc-btn-secondary'
-                "
-                @click="settingsStore.setThrottlePreset(p.id)"
+            <div style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 130px; overflow-y: auto">
+              <span
+                v-for="item in plan.primaryDeletes"
+                :key="item.id"
+                class="sbc-badge sbc-badge-rose"
               >
-                {{ p.name.replace('模式', '') }}
+                {{ item.name }}
+              </span>
+            </div>
+          </div>
+
+          <!-- 级联附属明细 -->
+          <div v-if="plan.cascadeItems.length > 0" class="sbc-section-box">
+            <div style="font-weight: 700; font-size: 12.5px">
+              关联世界书 / 面具 / 聊天记录处理明细 ({{ plan.cascadeItems.length }})
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto">
+              <div
+                v-for="(c, idx) in plan.cascadeItems"
+                :key="idx"
+                style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--sbc-bg-subtle)"
+              >
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0">
+                  <span
+                    class="sbc-badge"
+                    :class="c.action === 'delete' ? 'sbc-badge-rose' : 'sbc-badge-emerald'"
+                  >
+                    {{
+                      c.action === 'delete'
+                        ? '连带删除'
+                        : c.action === 'unbind_only'
+                          ? '安全解绑'
+                          : '智能保护跳过'
+                    }}
+                  </span>
+                  <strong style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+                    {{ c.name }}
+                  </strong>
+                </div>
+                <span style="font-size: 11px; color: var(--sbc-text-muted); flex-shrink: 0">
+                  {{ c.reason }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 执行中实时进度与日志控制台 -->
+        <template v-else>
+          <div class="sbc-section-box">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+              <div style="font-weight: 700; color: var(--sbc-text-primary)">
+                {{ progress.currentLabel || '正在执行清理...' }}
+              </div>
+              <span class="sbc-badge sbc-badge-primary">
+                {{ progress.currentStep }} / {{ progress.totalSteps }} ({{ progressPercent }}%)
+              </span>
+            </div>
+
+            <div class="sbc-progress-track">
+              <div class="sbc-progress-fill" :style="{ width: `${progressPercent}%` }" />
+            </div>
+
+            <div v-if="progress.running" style="display: flex; align-items: center; justify-content: flex-end; gap: 8px">
+              <button
+                type="button"
+                class="sbc-btn sbc-btn-secondary"
+                @click="cleanerStore.togglePauseExecution()"
+              >
+                <SvgIcon :name="progress.paused ? 'play' : 'pause'" :size="14" />
+                <span>{{ progress.paused ? '继续执行' : '暂停任务' }}</span>
+              </button>
+
+              <button
+                type="button"
+                class="sbc-btn sbc-btn-danger"
+                :disabled="progress.abortRequested"
+                @click="cleanerStore.requestAbortExecution()"
+              >
+                <SvgIcon name="stop" :size="14" />
+                <span>{{ progress.abortRequested ? '正在安全停止...' : '安全停止' }}</span>
               </button>
             </div>
           </div>
-        </div>
 
-
-        <!-- 实时执行进度条与暂停/终止控制台 -->
-        <div
-          v-if="cleanerStore.progress.phase !== 'idle'"
-          class="sbc-surface-muted space-y-2.5 rounded-xl border p-3.5"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span class="font-bold" style="color: var(--sbc-accent)">
-              {{ cleanerStore.progress.currentLabel }}
-            </span>
-            <div class="flex items-center gap-2">
-              <span class="font-mono font-semibold" style="color: var(--sbc-text-secondary)">
-                {{ cleanerStore.progress.currentStep }} / {{ cleanerStore.progress.totalSteps }} ({{ progressPercent }}%)
-              </span>
-              <template v-if="cleanerStore.progress.running">
-                <button
-                  type="button"
-                  class="sbc-btn-secondary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold"
-                  @click="cleanerStore.togglePauseExecution()"
-                >
-                  <SvgIcon :name="cleanerStore.progress.paused ? 'play' : 'pause'" :size="12" />
-                  <span>{{ cleanerStore.progress.paused ? '继续' : '暂停' }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="sbc-badge-rose inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold"
-                  @click="cleanerStore.abortCurrentExecution()"
-                >
-                  <SvgIcon name="stop" :size="12" />
-                  <span>紧急停止</span>
-                </button>
-              </template>
-            </div>
-          </div>
-
-          <div class="h-2.5 w-full overflow-hidden rounded-full" style="background: var(--sbc-border)">
+          <!-- 实时执行日志 -->
+          <div class="sbc-log-console">
             <div
-              class="h-full transition-all duration-200"
-              :style="{ width: `${progressPercent}%`, background: 'var(--sbc-accent)' }"
-            />
-          </div>
-
-          <div class="max-h-32 space-y-1 overflow-y-auto pt-1 font-mono text-[11px]">
-            <div
-              v-for="(log, idx) in cleanerStore.progress.logs"
+              v-for="(log, idx) in progress.logs"
               :key="idx"
-              :style="{
-                color:
-                  log.level === 'error'
-                    ? 'var(--sbc-rose-text)'
-                    : log.level === 'warn'
-                      ? 'var(--sbc-amber-text)'
-                      : log.level === 'success'
-                        ? 'var(--sbc-emerald-text)'
-                        : 'var(--sbc-text-secondary)',
-              }"
+              :style="{ color: logLevelColor(log.level) }"
             >
               [{{ log.time }}] {{ log.message }}
             </div>
           </div>
-        </div>
+        </template>
       </div>
 
-      <!-- 底部确认操作栏 -->
-      <div class="sbc-surface-elevated flex items-center justify-end gap-2.5 border-t px-4 py-3 sm:px-5">
+      <!-- 底部操作栏 -->
+      <footer class="sbc-footer">
         <button
           type="button"
-          :disabled="cleanerStore.progress.running"
-          class="sbc-btn-secondary sbc-touch-target rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-40"
-          @click="cleanerStore.isConfirmModalOpen = false"
+          class="sbc-btn sbc-btn-secondary"
+          :disabled="progress.running"
+          @click="cleanerStore.downloadBackupOnly()"
         >
-          {{
-            cleanerStore.progress.phase === 'completed' || cleanerStore.progress.phase === 'aborted'
-              ? '完成并关闭'
-              : '取消返回'
-          }}
+          <SvgIcon name="download" :size="15" />
+          <span>单独下载 JSON 备份</span>
         </button>
-        <button
-          v-if="cleanerStore.progress.phase !== 'completed'"
-          type="button"
-          :disabled="cleanerStore.progress.running || plan.primaryDeletes.length === 0"
-          class="sbc-btn-danger sbc-touch-target inline-flex items-center gap-2 rounded-xl px-5 py-2 text-xs font-bold"
-          @click="cleanerStore.executeCurrentPlan()"
-        >
-          <SvgIcon name="trash" :size="15" />
-          <span>
-            {{
-              cleanerStore.progress.running
-                ? cleanerStore.progress.paused
-                  ? '已暂停执行...'
-                  : '正在安全节流清理...'
-                : `确认永久清理 (${plan.primaryDeletes.length} 项)`
-            }}
-          </span>
-        </button>
-      </div>
+
+        <div class="sbc-footer-actions">
+          <button
+            type="button"
+            class="sbc-btn sbc-btn-secondary"
+            :disabled="progress.running"
+            @click="handleClose"
+          >
+            {{ progress.phase === 'idle' ? '取消返回' : '关闭窗口' }}
+          </button>
+
+          <button
+            v-if="progress.phase === 'idle'"
+            type="button"
+            class="sbc-btn sbc-btn-danger"
+            :disabled="plan.primaryDeletes.length === 0"
+            @click="cleanerStore.executeCurrentPlan()"
+          >
+            <SvgIcon name="trash" :size="15" />
+            <span>
+              确认清理 ({{ plan.primaryDeletes.length + cascadeDeleteItems.length }} 项)
+            </span>
+          </button>
+        </div>
+      </footer>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { CLOUD_THROTTLE_PROFILES } from '../../core/throttle';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useCleanerStore } from '../../stores/cleaner.store';
 import { useSettingsStore } from '../../stores/settings.store';
 import SvgIcon from '../icons/SvgIcon.vue';
 
 const cleanerStore = useCleanerStore();
 const settingsStore = useSettingsStore();
-const throttleList = Object.values(CLOUD_THROTTLE_PROFILES);
 
 const plan = computed(() => cleanerStore.dryRunPlan);
-const cascadeDeletes = computed(() => plan.value.cascadeItems.filter(c => c.action === 'delete'));
-const cascadeProtectedOrUnbind = computed(() =>
+const progress = computed(() => cleanerStore.progress);
+
+const cascadeDeleteItems = computed(() =>
+  plan.value.cascadeItems.filter(c => c.action === 'delete' && c.moduleId !== 'chat'),
+);
+
+const cascadeProtectedItems = computed(() =>
   plan.value.cascadeItems.filter(c => c.action !== 'delete'),
 );
 
 const progressPercent = computed(() => {
-  const { currentStep, totalSteps } = cleanerStore.progress;
-  if (!totalSteps) return 0;
-  return Math.min(100, Math.round((currentStep / totalSteps) * 100));
+  if (!progress.value.totalSteps) return 0;
+  return Math.min(100, Math.round((progress.value.currentStep / progress.value.totalSteps) * 100));
 });
 
-function moduleLabel(id: string): string {
-  switch (id) {
-    case 'worldbook':
-      return '世界书';
-    case 'persona':
-      return '面具';
-    case 'chat':
-      return '聊天记录';
+function handleClose() {
+  if (progress.value.running) return;
+  cleanerStore.isConfirmModalOpen = false;
+}
+
+function logLevelColor(level: 'info' | 'success' | 'warn' | 'error'): string {
+  switch (level) {
+    case 'success':
+      return 'var(--sbc-emerald-text)';
+    case 'warn':
+      return 'var(--sbc-amber-text)';
+    case 'error':
+      return 'var(--sbc-danger-text)';
     default:
-      return id;
+      return 'var(--sbc-text-secondary)';
   }
 }
 </script>
+

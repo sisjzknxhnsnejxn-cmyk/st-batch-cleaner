@@ -57,9 +57,11 @@ export function scanCharacterItems(graph: DependencyGraph): CleanableItem<Charac
       badges.push({ label: '含聊天文件', tone: 'neutral', icon: 'chat', tooltip: rawChar.chat });
     }
 
-    let avatarUrl: string | null = null;
+    let avatarUrl: string | null;
     try {
-      avatarUrl = getCharAvatarPath(avatarId) || SillyTavern.getThumbnailUrl('avatar', avatarId);
+      avatarUrl =
+        SillyTavern.getThumbnailUrl?.('avatar', avatarId) ||
+        `/characters/${encodeURIComponent(avatarId)}`;
     } catch {
       avatarUrl = `/characters/${encodeURIComponent(avatarId)}`;
     }

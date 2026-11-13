@@ -41,6 +41,8 @@ export type IconName =
   | 'auto_theme'
   | 'cloud'
   | 'stop'
+  | 'play'
+  | 'pause'
   | 'ios_share'
   | 'plus_square'
   | 'sort'
@@ -140,6 +142,8 @@ export interface BackupBundle {
 
 export interface ExecutionProgress {
   running: boolean;
+  /** 是否处于用户手动暂停等待状态 */
+  paused?: boolean;
   /** 是否已收到用户的安全停止指令 */
   abortRequested?: boolean;
   phase:
@@ -161,4 +165,5 @@ export interface ExecutionProgress {
     message: string;
   }>;
 }
+
 

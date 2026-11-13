@@ -2,32 +2,51 @@ import type { CleanerSettings } from '../stores/settings.store';
 import { renderInlineSvgHtml } from '../ui/icons/icons';
 
 /**
- * 快捷方式管理器（已彻底废弃原来的顶部栏 #top-settings-holder 注入）
+ * 全平台（iOS / Android / PC）无悬浮球快捷方式与按钮增强管理器
  *
- * 支持三种可实时开关的快捷入口：
- * 1. 可拖拽贴边磁吸悬浮球（支持 iOS/Android 触摸拖拽与 PC 鼠标拖拽，自动记忆百分比高度，贴边半隐藏不挡聊天）
- * 2. 酒馆输入框旁「魔棒扩展菜单 (#extensionsMenu)」入口
- * 3. 酒馆左下角「汉堡主菜单 (#options .options-content)」入口
+ * 支持零侵入、零屏幕遮挡的启动方式：
+ * 1. 酒馆助手脚本按钮 / 底部 #qr--bar 快捷按钮（含 iOS WebKit 非 <button> 轻触穿透兜底与按压动效）
+ * 2. 酒馆输入框旁「魔棒扩展菜单 (#extensionsMenu)」入口（按需触发挂载，0 后台轮询开销）
+ * 3. 酒馆左下角「汉堡主菜单 (#options .options-content)」入口（按需触发挂载，0 后台轮询开销）
+ * 4. PC 键盘快捷键 Alt + Shift + C
  */
 
-const FLOATING_BALL_ID = 'st-batch-cleaner-floating-ball';
-const FLOATING_BALL_STYLE_ID = 'st-batch-cleaner-floating-ball-style';
+const LEGACY_FLOATING_BALL_ID = 'st-batch-cleaner-floating-ball';
+const LEGACY_FLOATING_BALL_STYLE_ID = 'st-batch-cleaner-floating-ball-style';
+const SHORTCUT_ENHANCE_STYLE_ID = 'st-batch-cleaner-shortcut-style';
 const WAND_MENU_ITEM_ID = 'st-batch-cleaner-wand-menu-item';
 const OPTIONS_MENU_ITEM_ID = 'st-batch-cleaner-options-menu-item';
+const QR_BUTTON_SELECTOR =
+  '#qr--bar .qr--button, #qr--bar button, #qr--bar .menu_button, .qr--buttons .qr--button, .qr--buttons button, #extensions_settings .menu_button, #extensions_settings2 .menu_button';
 
 export interface ShortcutManagerOptions {
+  /** 点击按钮/菜单时强制打开弹窗（防重复事件冲撞关窗） */
   onOpenModal: () => void;
+  /** 键盘快捷键切换开关弹窗 */
+  onToggleModal?: () => void;
+  onEscapeKey?: () => void;
   getSettings: () => CleanerSettings;
-  getResolvedTheme: () => 'light' | 'dark';
-  onUpdateBallPosition: (side: 'left' | 'right', topPercent: number) => void;
+}
+
+function resolveElementTarget(raw: EventTarget | null): HTMLElement | null {
+  if (!raw) return null;
+  const node = raw as Node;
+  if (node.nodeType === 3) {
+    return node.parentElement;
+  }
+  return node.nodeType === 1 ? (node as HTMLElement) : null;
 }
 
 export class ShortcutManager {
   private parentDoc: Document;
   private parentWin: Window;
   private options: ShortcutManagerOptions;
-  private domObserver: MutationObserver | null = null;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private parentClickHandler: ((e: MouseEvent) => void) | null = null;
+  private parentTouchStartHandler: ((e: TouchEvent) => void) | null = null;
+  private parentTouchEndHandler: ((e: TouchEvent) => void) | null = null;
+  private initTimers: number[] = [];
+  private lastTriggerAt = 0;
 
   constructor(options: ShortcutManagerOptions) {
     this.parentWin = window.parent ?? window;
@@ -35,61 +54,173 @@ export class ShortcutManager {
     this.options = options;
   }
 
-  /**
-   * 初始化快捷入口与全局键盘快捷键 (Alt + Shift + C)
-   */
-  public init(): void {
-    // 清理可能残留的旧版顶部栏按钮
-    $('#st-batch-cleaner-topbar-trigger', this.parentDoc).remove();
+  public triggerOpenWithFeedback(sourceEl?: HTMLElement | null): void {
+    const now = Date.now();
+    if (now - this.lastTriggerAt < 320) return;
+    this.lastTriggerAt = now;
 
-    this.injectFloatingBallStyles();
-    this.syncAll();
-
-    // 监听酒馆 DOM 延迟渲染（例如扩展菜单在首次打开或延迟加载时才出现）
-    this.domObserver = new MutationObserver(
-      _.throttle(() => {
-        this.syncMenusOnly();
-      }, 1200),
-    );
-
-    if (this.parentDoc.body) {
-      this.domObserver.observe(this.parentDoc.body, {
-        childList: true,
-        subtree: false,
-      });
+    if (sourceEl) {
+      sourceEl.classList.remove('sbc-trigger-pulse');
+      void sourceEl.offsetWidth;
+      sourceEl.classList.add('sbc-trigger-pulse');
+      setTimeout(() => {
+        sourceEl.classList.remove('sbc-trigger-pulse');
+      }, 360);
     }
 
-    // 注册 PC 全局快捷键 Alt + Shift + C
+    this.options.onOpenModal();
+  }
+
+
+  public init(): void {
+    $('#st-batch-cleaner-topbar-trigger', this.parentDoc).remove();
+    $(`#${LEGACY_FLOATING_BALL_ID}`, this.parentDoc).remove();
+    $(`#${LEGACY_FLOATING_BALL_STYLE_ID}`, this.parentDoc).remove();
+
+    this.injectShortcutStyles();
+    this.syncAll();
+    this.enhanceNativeQrButtons();
+
+    const t1 = window.setTimeout(() => {
+      this.syncAll();
+      this.enhanceNativeQrButtons();
+    }, 500);
+    const t2 = window.setTimeout(() => {
+      this.syncAll();
+      this.enhanceNativeQrButtons();
+    }, 2000);
+    this.initTimers.push(t1, t2);
+
     this.keydownHandler = (e: KeyboardEvent) => {
       if (e.altKey && e.shiftKey && e.code === 'KeyC') {
         e.preventDefault();
-        this.options.onOpenModal();
+        if (this.options.onToggleModal) {
+          this.options.onToggleModal();
+        } else {
+          this.triggerOpenWithFeedback();
+        }
+      } else if (e.key === 'Escape') {
+        this.options.onEscapeKey?.();
       }
     };
     this.parentWin.addEventListener('keydown', this.keydownHandler);
+
+    let touchStartPos: { x: number; y: number; time: number; btn: HTMLElement } | null = null;
+
+    this.parentTouchStartHandler = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        touchStartPos = null;
+        return;
+      }
+      const target = resolveElementTarget(e.target);
+      if (!target) return;
+
+      if (target.closest?.('#extensionsMenuButton, #options_button')) {
+        this.syncAll();
+      }
+
+      const qrBtn = this.findCleanerQrButton(target);
+      if (!qrBtn) {
+        touchStartPos = null;
+        return;
+      }
+      qrBtn.classList.add('sbc-qr-pressing');
+      const touch = e.touches[0];
+      touchStartPos = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: Date.now(),
+        btn: qrBtn,
+      };
+    };
+
+    this.parentTouchEndHandler = (e: TouchEvent) => {
+      if (!touchStartPos) return;
+      const record = touchStartPos;
+      touchStartPos = null;
+      record.btn.classList.remove('sbc-qr-pressing');
+
+      if (e.changedTouches.length === 0) return;
+      const touch = e.changedTouches[0];
+      const dist = Math.hypot(touch.clientX - record.x, touch.clientY - record.y);
+      const elapsed = Date.now() - record.time;
+      if (dist > 18 || elapsed > 750) return;
+
+      const endTarget = resolveElementTarget(e.target);
+      const endBtn = this.findCleanerQrButton(endTarget);
+      if (!endBtn) return;
+
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      this.triggerOpenWithFeedback(endBtn);
+    };
+
+    this.parentClickHandler = (e: MouseEvent) => {
+      const target = resolveElementTarget(e.target);
+      if (!target) return;
+
+      if (target.closest?.('#extensionsMenuButton, #options_button')) {
+        this.syncAll();
+        return;
+      }
+
+      const qrBtn = this.findCleanerQrButton(target);
+      if (qrBtn) {
+        this.triggerOpenWithFeedback(qrBtn);
+      }
+    };
+
+    this.parentDoc.addEventListener('touchstart', this.parentTouchStartHandler, {
+      capture: true,
+      passive: true,
+    });
+    this.parentDoc.addEventListener('touchend', this.parentTouchEndHandler, {
+      capture: true,
+      passive: false,
+    });
+    this.parentDoc.addEventListener('click', this.parentClickHandler, true);
   }
 
-  /**
-   * 根据最新设置同步所有快捷入口的挂载/卸载与主题外观
-   */
-  public syncAll(): void {
-    const settings = this.options.getSettings();
-    const theme = this.options.getResolvedTheme();
 
-    if (settings.shortcuts.enableFloatingBall) {
-      this.mountOrUpdateFloatingBall(
-        settings.shortcuts.floatingBallSide,
-        settings.shortcuts.floatingBallTopPercent,
-        theme,
-      );
-    } else {
-      this.removeFloatingBall();
+  private isCleanerButtonElement(el: HTMLElement): boolean {
+    const label = (el.textContent || el.getAttribute('title') || '').trim();
+    return label.length > 0 && label.length <= 36 && label.includes('批量清理中心');
+  }
+
+  private findCleanerQrButton(target: HTMLElement | null): HTMLElement | null {
+    if (!target || typeof target.closest !== 'function') return null;
+    if (target.closest('.sbc-host-root, .sbc-theme-root')) return null;
+    if (target.closest(`#${WAND_MENU_ITEM_ID}, #${OPTIONS_MENU_ITEM_ID}`)) {
+      return null;
     }
-
-    this.syncMenusOnly();
+    const btn = target.closest(QR_BUTTON_SELECTOR) as HTMLElement | null;
+    if (!btn) return null;
+    return this.isCleanerButtonElement(btn) ? btn : null;
   }
 
-  private syncMenusOnly(): void {
+  public enhanceNativeQrButtons(): void {
+    try {
+      const candidates = this.parentDoc.querySelectorAll(QR_BUTTON_SELECTOR);
+      candidates.forEach(node => {
+        const el = node as HTMLElement;
+        if (el.closest('.sbc-host-root, .sbc-theme-root')) return;
+        if (!this.isCleanerButtonElement(el)) return;
+        el.classList.add('sbc-enhanced-qr-btn');
+        if (!el.getAttribute('role') && el.tagName !== 'BUTTON') {
+          el.setAttribute('role', 'button');
+          el.setAttribute('tabindex', '0');
+        }
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  public syncAll(): void {
+    $(`#${LEGACY_FLOATING_BALL_ID}`, this.parentDoc).remove();
+    $(`#${LEGACY_FLOATING_BALL_STYLE_ID}`, this.parentDoc).remove();
+
     const settings = this.options.getSettings();
 
     if (settings.shortcuts.enableMagicWandMenu) {
@@ -105,219 +236,76 @@ export class ShortcutManager {
     }
   }
 
-  /**
-   * 卸载并清理所有注入到酒馆父页面的 DOM 节点与事件监听
-   */
   public destroy(): void {
-    this.domObserver?.disconnect();
-    this.domObserver = null;
+    this.initTimers.forEach(t => window.clearTimeout(t));
+    this.initTimers = [];
 
     if (this.keydownHandler) {
       this.parentWin.removeEventListener('keydown', this.keydownHandler);
       this.keydownHandler = null;
     }
+    if (this.parentTouchStartHandler) {
+      this.parentDoc.removeEventListener('touchstart', this.parentTouchStartHandler, true);
+      this.parentTouchStartHandler = null;
+    }
+    if (this.parentTouchEndHandler) {
+      this.parentDoc.removeEventListener('touchend', this.parentTouchEndHandler, true);
+      this.parentTouchEndHandler = null;
+    }
+    if (this.parentClickHandler) {
+      this.parentDoc.removeEventListener('click', this.parentClickHandler, true);
+      this.parentClickHandler = null;
+    }
 
-    this.removeFloatingBall();
-    $(`#${FLOATING_BALL_STYLE_ID}`, this.parentDoc).remove();
+    $(`#${LEGACY_FLOATING_BALL_ID}`, this.parentDoc).remove();
+    $(`#${LEGACY_FLOATING_BALL_STYLE_ID}`, this.parentDoc).remove();
+    $(`#${SHORTCUT_ENHANCE_STYLE_ID}`, this.parentDoc).remove();
     $(`#${WAND_MENU_ITEM_ID}`, this.parentDoc).remove();
     $(`#${OPTIONS_MENU_ITEM_ID}`, this.parentDoc).remove();
     $('#st-batch-cleaner-topbar-trigger', this.parentDoc).remove();
   }
 
-  /**
-   * 注入悬浮球专属的高可读性、磁吸半隐藏与安全区适配样式
-   */
-  private injectFloatingBallStyles(): void {
-    if ($(`#${FLOATING_BALL_STYLE_ID}`, this.parentDoc).length > 0) return;
+
+  private injectShortcutStyles(): void {
+    $(`#${SHORTCUT_ENHANCE_STYLE_ID}`, this.parentDoc).remove();
 
     const css = `
-      #${FLOATING_BALL_ID} {
-        position: fixed;
-        z-index: 9990;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        height: 44px;
-        padding: 0 12px;
-        border-radius: 9999px;
-        cursor: grab;
-        user-select: none;
-        -webkit-user-select: none;
-        touch-action: none;
-        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-        font-size: 12px;
-        font-weight: 600;
-        transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+      .sbc-enhanced-qr-btn,
+      #${WAND_MENU_ITEM_ID},
+      #${OPTIONS_MENU_ITEM_ID} {
+        cursor: pointer !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: transparent !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.14s ease, background-color 0.14s ease !important;
       }
-      #${FLOATING_BALL_ID}[data-theme="dark"] {
-        background: rgba(17, 24, 39, 0.94);
-        color: #f8fafc;
-        border: 1.5px solid rgba(99, 102, 241, 0.65);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+      .sbc-enhanced-qr-btn:active,
+      .sbc-enhanced-qr-btn.sbc-qr-pressing,
+      #${WAND_MENU_ITEM_ID}:active,
+      #${OPTIONS_MENU_ITEM_ID}:active {
+        transform: scale(0.94) !important;
+        opacity: 0.86 !important;
       }
-      #${FLOATING_BALL_ID}[data-theme="light"] {
-        background: rgba(255, 255, 255, 0.96);
-        color: #0f172a;
-        border: 1.5px solid #4f46e5;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+      @keyframes sbc-trigger-ripple {
+        0% {
+          box-shadow: 0 0 0 0 rgba(94, 129, 244, 0.65);
+        }
+        100% {
+          box-shadow: 0 0 0 12px rgba(94, 129, 244, 0);
+        }
       }
-      #${FLOATING_BALL_ID}.is-dragging {
-        cursor: grabbing;
-        transition: none !important;
-        transform: scale(1.06) !important;
-        opacity: 1 !important;
-      }
-      #${FLOATING_BALL_ID}[data-side="right"] {
-        right: max(6px, env(safe-area-inset-right, 6px));
-        transform: translateX(46%);
-        opacity: 0.88;
-      }
-      #${FLOATING_BALL_ID}[data-side="left"] {
-        left: max(6px, env(safe-area-inset-left, 6px));
-        transform: translateX(-46%);
-        opacity: 0.88;
-      }
-      #${FLOATING_BALL_ID}:hover,
-      #${FLOATING_BALL_ID}:focus-visible {
-        transform: translateX(0) !important;
-        opacity: 1 !important;
-      }
-      #${FLOATING_BALL_ID} .sbc-ball-icon {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 26px;
-        height: 26px;
-        border-radius: 9999px;
-        background: linear-gradient(135deg, #4f46e5, #6366f1);
-        color: #ffffff;
-        flex-shrink: 0;
-      }
-      #${FLOATING_BALL_ID} .sbc-ball-label {
-        white-space: nowrap;
-        letter-spacing: 0.02em;
+      .sbc-trigger-pulse {
+        animation: sbc-trigger-ripple 0.36s ease-out !important;
       }
     `;
 
     $('<style>')
-      .attr('id', FLOATING_BALL_STYLE_ID)
+      .attr('id', SHORTCUT_ENHANCE_STYLE_ID)
       .text(css)
       .appendTo(this.parentDoc.head);
   }
 
-  private mountOrUpdateFloatingBall(
-    side: 'left' | 'right',
-    topPercent: number,
-    theme: 'light' | 'dark',
-  ): void {
-    let $ball = $(`#${FLOATING_BALL_ID}`, this.parentDoc);
-    const clampedTop = Math.min(90, Math.max(8, topPercent));
-
-    if ($ball.length === 0) {
-      const html = `
-        <div id="${FLOATING_BALL_ID}" role="button" tabindex="0" title="打开酒馆资产批量清理中心 (可按住自由拖动位置)">
-          <span class="sbc-ball-icon">${renderInlineSvgHtml('broom', 16, 2.2)}</span>
-          <span class="sbc-ball-label">批量清理</span>
-        </div>
-      `;
-      $ball = $(html).appendTo(this.parentDoc.body);
-      this.bindFloatingBallDragAndClick($ball[0]);
-    }
-
-    $ball
-      .attr('data-side', side)
-      .attr('data-theme', theme)
-      .css({
-        top: `${clampedTop}vh`,
-        left: side === 'left' ? 'max(6px, env(safe-area-inset-left, 6px))' : 'auto',
-        right: side === 'right' ? 'max(6px, env(safe-area-inset-right, 6px))' : 'auto',
-      });
-  }
-
-  private bindFloatingBallDragAndClick(el: HTMLElement): void {
-    let isDragging = false;
-    let hasMoved = false;
-    let startX = 0;
-    let startY = 0;
-    let initialRectTop = 0;
-    let initialRectLeft = 0;
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      isDragging = true;
-      hasMoved = false;
-      startX = e.clientX;
-      startY = e.clientY;
-      const rect = el.getBoundingClientRect();
-      initialRectTop = rect.top;
-      initialRectLeft = rect.left;
-      el.setPointerCapture?.(e.pointerId);
-    };
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (!isDragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      if (!hasMoved && Math.hypot(dx, dy) > 6) {
-        hasMoved = true;
-        el.classList.add('is-dragging');
-      }
-      if (!hasMoved) return;
-
-      const winW = this.parentWin.innerWidth || 1024;
-      const winH = this.parentWin.innerHeight || 768;
-      const nextLeft = Math.min(winW - el.offsetWidth - 4, Math.max(4, initialRectLeft + dx));
-      const nextTop = Math.min(winH - el.offsetHeight - 12, Math.max(12, initialRectTop + dy));
-
-      el.style.left = `${nextLeft}px`;
-      el.style.right = 'auto';
-      el.style.top = `${nextTop}px`;
-    };
-
-    const finishPointer = (e: PointerEvent) => {
-      if (!isDragging) return;
-      isDragging = false;
-      el.releasePointerCapture?.(e.pointerId);
-
-      if (hasMoved) {
-        el.classList.remove('is-dragging');
-        const rect = el.getBoundingClientRect();
-        const winW = this.parentWin.innerWidth || 1024;
-        const winH = this.parentWin.innerHeight || 768;
-
-        const centerX = rect.left + rect.width / 2;
-        const nextSide: 'left' | 'right' = centerX < winW / 2 ? 'left' : 'right';
-        const nextTopPercent = Math.round(
-          Math.min(90, Math.max(8, (rect.top / Math.max(1, winH)) * 100)),
-        );
-
-        el.setAttribute('data-side', nextSide);
-        el.style.top = `${nextTopPercent}vh`;
-        el.style.left = nextSide === 'left' ? 'max(6px, env(safe-area-inset-left, 6px))' : 'auto';
-        el.style.right = nextSide === 'right' ? 'max(6px, env(safe-area-inset-right, 6px))' : 'auto';
-
-        this.options.onUpdateBallPosition(nextSide, nextTopPercent);
-      } else {
-        this.options.onOpenModal();
-      }
-    };
-
-    el.addEventListener('pointerdown', onPointerDown);
-    el.addEventListener('pointermove', onPointerMove);
-    el.addEventListener('pointerup', finishPointer);
-    el.addEventListener('pointercancel', finishPointer);
-    el.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        this.options.onOpenModal();
-      }
-    });
-  }
-
-  private removeFloatingBall(): void {
-    $(`#${FLOATING_BALL_ID}`, this.parentDoc).remove();
-  }
 
   /**
    * 在酒馆输入框左侧的「魔棒扩展菜单 (#extensionsMenu)」注入入口
@@ -328,7 +316,7 @@ export class ShortcutManager {
     if ($(`#${WAND_MENU_ITEM_ID}`, this.parentDoc).length > 0) return;
 
     const itemHtml = `
-      <div id="${WAND_MENU_ITEM_ID}" class="list-group-item flex-container flexGap5 interactable" tabindex="0" title="打开酒馆资产批量清理中心">
+      <div id="${WAND_MENU_ITEM_ID}" class="list-group-item flex-container flexGap5 interactable" role="button" tabindex="0" title="打开酒馆资产批量清理中心">
         <div class="extensionsMenuExtensionButton" style="display:inline-flex;align-items:center;justify-content:center;">
           ${renderInlineSvgHtml('broom', 16, 2)}
         </div>
@@ -337,11 +325,11 @@ export class ShortcutManager {
     `;
 
     const $item = $(itemHtml);
-    $item.on('click', e => {
+    $item.on('click touchend', e => {
       e.preventDefault();
       e.stopPropagation();
       $menu.hide();
-      this.options.onOpenModal();
+      this.triggerOpenWithFeedback($item.get(0) ?? null);
     });
 
     $menu.append($item);
@@ -356,20 +344,21 @@ export class ShortcutManager {
     if ($(`#${OPTIONS_MENU_ITEM_ID}`, this.parentDoc).length > 0) return;
 
     const itemHtml = `
-      <a id="${OPTIONS_MENU_ITEM_ID}" class="interactable" tabindex="0" style="display:flex;align-items:center;gap:8px;">
+      <a id="${OPTIONS_MENU_ITEM_ID}" class="interactable" role="button" tabindex="0" style="display:flex;align-items:center;gap:8px;">
         ${renderInlineSvgHtml('broom', 17, 2)}
         <span>批量清理中心</span>
       </a>
     `;
 
     const $item = $(itemHtml);
-    $item.on('click', e => {
+    $item.on('click touchend', e => {
       e.preventDefault();
       e.stopPropagation();
       $('#options', this.parentDoc).hide();
-      this.options.onOpenModal();
+      this.triggerOpenWithFeedback($item.get(0) ?? null);
     });
 
     $options.append($item);
   }
 }
+

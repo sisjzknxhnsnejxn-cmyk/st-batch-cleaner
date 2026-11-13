@@ -58,11 +58,13 @@ export function scanPersonaItems(graph: DependencyGraph): CleanableItem<PersonaI
       });
     }
 
-    let avatarUrl: string | null = null;
+    let avatarUrl: string | null;
     try {
-      avatarUrl = getPersonaAvatarPath(avatarId);
+      avatarUrl =
+        SillyTavern.getThumbnailUrl?.('persona', avatarId) ||
+        `/User Avatars/${encodeURIComponent(avatarId)}`;
     } catch {
-      avatarUrl = null;
+      avatarUrl = `/User Avatars/${encodeURIComponent(avatarId)}`;
     }
 
     const subtitleParts = [avatarId];

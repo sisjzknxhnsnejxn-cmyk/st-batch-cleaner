@@ -1,3 +1,5 @@
+import _ from 'lodash';
+
 export interface CharacterRelationNode {
   avatarId: string;
   name: string;
@@ -86,28 +88,45 @@ export function buildDependencyGraph(): DependencyGraph {
   }
 
   const rawChars = Array.isArray(SillyTavern.characters) ? SillyTavern.characters : [];
+  // 建立 O(1) 哈希索引，避免面具连接匹配时 O(N*M) 线性遍历卡顿
+  const charByName = new Map<string, string>();
+  const charByStem = new Map<string, string>();
+
+  // 直接从酒馆内存读取附加世界书映射，避免在循环中对成百上千张角色卡逐个调用高开销的 getCharWorldbookNames()
+  const extSettings = (SillyTavern as any)?.extensionSettings;
+  const charLoreList: Array<{ name?: string; extraBooks?: string[] }> = Array.isArray(
+    extSettings?.character_lore,
+  )
+    ? extSettings.character_lore
+    : [];
+  const extraBooksByAvatar = new Map<string, string[]>();
+  for (const entry of charLoreList) {
+    if (entry?.name && Array.isArray(entry.extraBooks)) {
+      extraBooksByAvatar.set(entry.name, entry.extraBooks.filter(Boolean));
+    }
+  }
+
   for (const rawChar of rawChars) {
     const avatarId = rawChar?.avatar;
     if (!avatarId) continue;
 
-    let primaryWb: string | null = null;
-    let additionalWbs: string[] = [];
-    try {
-      const charWbs = getCharWorldbookNames(avatarId);
-      primaryWb = charWbs?.primary || null;
-      additionalWbs = Array.isArray(charWbs?.additional) ? charWbs.additional.filter(Boolean) : [];
-    } catch {
-      primaryWb = rawChar?.data?.extensions?.world || null;
-    }
+    const primaryWb: string | null = rawChar?.data?.extensions?.world || null;
+    const stem = avatarId.replace(/\.png$/i, '');
+    const additionalWbs: string[] =
+      extraBooksByAvatar.get(avatarId) ?? extraBooksByAvatar.get(stem) ?? [];
 
     const allWbs = _.uniq([primaryWb, ...additionalWbs].filter((x): x is string => Boolean(x)));
     const isFav = Boolean(
       rawChar.fav === true || rawChar.fav === 'true' || rawChar?.data?.extensions?.fav === true,
     );
+    const charName = rawChar.name || stem;
+
+    if (!charByName.has(charName)) charByName.set(charName, avatarId);
+    if (!charByStem.has(stem)) charByStem.set(stem, avatarId);
 
     characters.set(avatarId, {
       avatarId,
-      name: rawChar.name || avatarId.replace(/\.png$/i, ''),
+      name: charName,
       primaryWorldbook: primaryWb,
       additionalWorldbooks: additionalWbs,
       allWorldbooks: allWbs,
@@ -136,7 +155,7 @@ export function buildDependencyGraph(): DependencyGraph {
 
       for (const conn of connections) {
         if (conn.type === 'character' && conn.id) {
-          const matched = resolveCharId(conn.id, characters);
+          const matched = resolveCharIdFast(conn.id, characters, charByName, charByStem);
           if (matched) {
             boundCharIds.push(matched);
             const cNode = characters.get(matched);
@@ -186,13 +205,15 @@ export function buildDependencyGraph(): DependencyGraph {
   };
 }
 
-function resolveCharId(rawId: string, chars: Map<string, CharacterRelationNode>): string | null {
+function resolveCharIdFast(
+  rawId: string,
+  chars: Map<string, CharacterRelationNode>,
+  charByName: Map<string, string>,
+  charByStem: Map<string, string>,
+): string | null {
   if (chars.has(rawId)) return rawId;
   const withPng = rawId.endsWith('.png') ? rawId : `${rawId}.png`;
   if (chars.has(withPng)) return withPng;
-  for (const [avatarId, node] of chars.entries()) {
-    if (node.name === rawId || avatarId.replace(/\.png$/i, '') === rawId) return avatarId;
-  }
-  return null;
+  return charByStem.get(rawId) ?? charByName.get(rawId) ?? null;
 }
 

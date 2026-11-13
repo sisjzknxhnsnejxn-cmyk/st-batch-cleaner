@@ -9,7 +9,7 @@
     :stroke-width="strokeWidth"
     stroke-linecap="round"
     stroke-linejoin="round"
-    class="inline-block shrink-0 select-none"
+    class="sbc-svg-icon"
     aria-hidden="true"
   >
     <path v-for="(d, idx) in paths" :key="idx" :d="d" />
@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { IconName } from '../../types/cleaner';
 import { SVG_ICONS } from './icons';
 
@@ -36,3 +37,4 @@ const props = withDefaults(
 
 const paths = computed(() => SVG_ICONS[props.name] ?? []);
 </script>
+

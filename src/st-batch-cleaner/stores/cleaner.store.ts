@@ -1,3 +1,7 @@
+import _ from 'lodash';
+import { defineStore } from 'pinia';
+import toastr from 'toastr';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { createAndDownloadBackup } from '../core/backup';
 import { buildDependencyGraph, type DependencyGraph } from '../core/dependency-graph';
 import { executeDryRunPlan } from '../core/executor';
@@ -34,9 +38,10 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
   const renderLimit = ref(RENDER_CHUNK_SIZE);
   const isScanning = ref(false);
   const abortFlag = ref(false);
+  const pauseFlag = ref(false);
 
   const graph = shallowRef<DependencyGraph | null>(null);
-  const itemsByModule = ref<Record<CleanerModuleId, CleanableItem[]>>({
+  const itemsByModule = shallowRef<Record<CleanerModuleId, CleanableItem[]>>({
     character: [],
     worldbook: [],
     persona: [],
@@ -50,6 +55,7 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
 
   const progress = ref<ExecutionProgress>({
     running: false,
+    paused: false,
     abortRequested: false,
     phase: 'idle',
     currentStep: 0,
@@ -117,14 +123,27 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
 
   /** 当前实际渲染到 DOM 的切片（增量渲染防 DOM 过载） */
   const visibleItems = computed(() => filteredItems.value.slice(0, renderLimit.value));
+  const visibleFilteredItems = visibleItems;
   const hasMoreItems = computed(() => filteredItems.value.length > renderLimit.value);
 
   function loadMoreItems(): void {
     renderLimit.value += RENDER_CHUNK_SIZE;
   }
 
+  const loadMoreVisibleItems = loadMoreItems;
+
   const dryRunPlan = computed<DryRunPlan>(() => {
-    const g = graph.value ?? buildDependencyGraph();
+    const g = graph.value;
+    if (!g || currentSelectedSet.value.size === 0) {
+      return {
+        moduleId: activeModuleId.value,
+        primaryDeletes: [],
+        skippedPrimary: [],
+        cascadeItems: [],
+        warnings: [],
+      };
+    }
+
     const basePlan = activeModule.value.buildDryRun(
       currentItems.value,
       currentSelectedSet.value,
@@ -147,22 +166,32 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
     };
   });
 
+  const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
-  function refreshAll(): void {
+  async function refreshAll(): Promise<void> {
     if (isScanning.value || progress.value.running) return;
     isScanning.value = true;
     try {
+      await yieldFrame();
       const nextGraph = buildDependencyGraph();
       graph.value = nextGraph;
 
+      const nextItemsMap: Record<CleanerModuleId, CleanableItem[]> = {
+        character: [],
+        worldbook: [],
+        persona: [],
+      };
+
       for (const mod of CLEANER_MODULES) {
+        await yieldFrame();
         const scanned = mod.scan(nextGraph);
-        itemsByModule.value[mod.id] = scanned;
+        nextItemsMap[mod.id] = scanned;
         const validIdSet = new Set(scanned.map(i => i.id));
         selectedMap.value[mod.id] = (selectedMap.value[mod.id] ?? []).filter(id =>
           validIdSet.has(id),
         );
       }
+      itemsByModule.value = nextItemsMap;
     } catch (err) {
       console.error('[st-batch-cleaner] 扫描资产图谱失败:', err);
       toastr.error(`扫描酒馆资产失败: ${String(err)}`, '批量清理中心');
@@ -172,8 +201,8 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
   }
 
   function openModal(): void {
-    refreshAll();
     isModalOpen.value = true;
+    void refreshAll();
   }
 
   function closeModal(): void {
@@ -184,6 +213,29 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
     isModalOpen.value = false;
     isConfirmModalOpen.value = false;
     isSettingsDrawerOpen.value = false;
+  }
+
+  function toggleModal(): void {
+    if (isModalOpen.value) {
+      closeModal();
+    } else {
+      openModal();
+    }
+  }
+
+  function handleEscapeKey(): void {
+    if (!isModalOpen.value) return;
+    if (isSettingsDrawerOpen.value) {
+      isSettingsDrawerOpen.value = false;
+      return;
+    }
+    if (isConfirmModalOpen.value) {
+      if (!progress.value.running) {
+        isConfirmModalOpen.value = false;
+      }
+      return;
+    }
+    closeModal();
   }
 
   function switchModule(moduleId: CleanerModuleId): void {
@@ -215,38 +267,57 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
       }
       return;
     }
-    const list = selectedMap.value[activeModuleId.value];
+    const modId = activeModuleId.value;
+    const list = selectedMap.value[modId] ?? [];
     const idx = list.indexOf(item.id);
     if (idx >= 0) {
-      list.splice(idx, 1);
+      selectedMap.value = {
+        ...selectedMap.value,
+        [modId]: list.filter(id => id !== item.id),
+      };
     } else {
-      list.push(item.id);
+      selectedMap.value = {
+        ...selectedMap.value,
+        [modId]: [...list, item.id],
+      };
     }
   }
 
   function selectAllFiltered(): void {
-    const currentSet = new Set(selectedMap.value[activeModuleId.value]);
+    const modId = activeModuleId.value;
+    const currentSet = new Set(selectedMap.value[modId] ?? []);
     for (const item of filteredItems.value) {
       if (isItemSelectable(item)) currentSet.add(item.id);
     }
-    selectedMap.value[activeModuleId.value] = [...currentSet];
+    selectedMap.value = {
+      ...selectedMap.value,
+      [modId]: [...currentSet],
+    };
   }
 
   function invertFilteredSelection(): void {
-    const currentSet = new Set(selectedMap.value[activeModuleId.value]);
+    const modId = activeModuleId.value;
+    const currentSet = new Set(selectedMap.value[modId] ?? []);
     for (const item of filteredItems.value) {
       if (!isItemSelectable(item)) continue;
       if (currentSet.has(item.id)) currentSet.delete(item.id);
       else currentSet.add(item.id);
     }
-    selectedMap.value[activeModuleId.value] = [...currentSet];
+    selectedMap.value = {
+      ...selectedMap.value,
+      [modId]: [...currentSet],
+    };
   }
 
   function selectOnlyOrphans(): void {
+    const modId = activeModuleId.value;
     const orphanIds = currentItems.value
       .filter(item => item.isOrphan && isItemSelectable(item))
       .map(item => item.id);
-    selectedMap.value[activeModuleId.value] = orphanIds;
+    selectedMap.value = {
+      ...selectedMap.value,
+      [modId]: orphanIds,
+    };
     if (orphanIds.length === 0) {
       toastr.info('当前分类下没有检测到闲置/未绑定项');
     } else {
@@ -255,8 +326,13 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
   }
 
   function clearCurrentSelection(): void {
-    selectedMap.value[activeModuleId.value] = [];
+    const modId = activeModuleId.value;
+    selectedMap.value = {
+      ...selectedMap.value,
+      [modId]: [],
+    };
   }
+
 
   function openDryRunConfirm(): void {
     if (dryRunPlan.value.primaryDeletes.length === 0) {
@@ -264,8 +340,10 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
       return;
     }
     abortFlag.value = false;
+    pauseFlag.value = false;
     progress.value = {
       running: false,
+      paused: false,
       abortRequested: false,
       phase: 'idle',
       currentStep: 0,
@@ -276,13 +354,23 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
     isConfirmModalOpen.value = true;
   }
 
+  function togglePauseExecution(): void {
+    if (!progress.value.running) return;
+    pauseFlag.value = !pauseFlag.value;
+    progress.value.paused = pauseFlag.value;
+  }
+
   function requestAbortExecution(): void {
     if (!progress.value.running) return;
     abortFlag.value = true;
+    pauseFlag.value = false;
+    progress.value.paused = false;
     progress.value.abortRequested = true;
     progress.value.currentLabel = '已请求安全停止，正在等待当前单项完成...';
     toastr.info('已发送安全停止信号，当前单项完成后将立即停止并同步酒馆状态');
   }
+
+  const abortCurrentExecution = requestAbortExecution;
 
   async function downloadBackupOnly(): Promise<void> {
     try {
@@ -300,6 +388,7 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
   async function executeCurrentPlan(): Promise<void> {
     if (progress.value.running) return;
     abortFlag.value = false;
+    pauseFlag.value = false;
     try {
       const result = await executeDryRunPlan(
         dryRunPlan.value,
@@ -309,6 +398,7 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
           throttlePreset: settingsStore.settings.cloudThrottlePreset,
           cascadeOptions: settingsStore.settings.characterCascade,
           shouldAbort: () => abortFlag.value,
+          shouldPause: () => pauseFlag.value,
         },
         updater => updater(progress.value),
       );
@@ -341,13 +431,18 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
     currentSelectedSet,
     filteredItems,
     visibleItems,
+    visibleFilteredItems,
     hasMoreItems,
     loadMoreItems,
+    loadMoreVisibleItems,
     dryRunPlan,
     refreshAll,
     openModal,
     closeModal,
+    toggleModal,
+    handleEscapeKey,
     switchModule,
+
     isItemSelectable,
     toggleSelectItem,
     selectAllFiltered,
@@ -355,7 +450,9 @@ export const useCleanerStore = defineStore('st-batch-cleaner-main', () => {
     selectOnlyOrphans,
     clearCurrentSelection,
     openDryRunConfirm,
+    togglePauseExecution,
     requestAbortExecution,
+    abortCurrentExecution,
     downloadBackupOnly,
     executeCurrentPlan,
   };
