@@ -76,16 +76,6 @@ function init() {
     cleanerStore.openModal();
   });
 
-  // 暴露全局唤起钩子，支持云端热更新加载器在脚本加载完成后自动打开窗口
-  const globalWin = window as unknown as {
-    __ST_BATCH_CLEANER_REGISTER_OPEN__?: (fn: () => void) => void;
-    __ST_BATCH_CLEANER_OPEN__?: () => void;
-  };
-  globalWin.__ST_BATCH_CLEANER_OPEN__ = () => cleanerStore.openModal();
-  if (typeof globalWin.__ST_BATCH_CLEANER_REGISTER_OPEN__ === 'function') {
-    globalWin.__ST_BATCH_CLEANER_REGISTER_OPEN__(() => cleanerStore.openModal());
-  }
-
   // 挂载三合一快捷入口管理器（已移除旧版顶部栏入口，改为贴边磁吸悬浮球 + 魔棒扩展菜单 + 汉堡主菜单）
   const shortcutManager = new ShortcutManager({
     onOpenModal: () => cleanerStore.openModal(),
