@@ -1,0 +1,312 @@
+/**
+ * 酒馆资产批量清理中心 - 高对比度日夜间双主题与多端响应式样式表
+ *
+ * 设计准则：
+ * 1. 强可读性（WCAG AA/AAA 对比度）：无论强光日间还是暗光夜间，标题、副标题、边框、徽章均清晰分明。
+ * 2. 全平台触控适配：iOS 安全区 (env(safe-area-inset-*))、移动端 44px 触控热区、16px 输入框防 iOS 自动放大。
+ * 3. 语义化 CSS 变量：便于后续维护或扩展新主题。
+ */
+
+.sbc-theme-root {
+  /* 默认日间高对比度主题 (Light Mode) */
+  --sbc-overlay: rgba(15, 23, 42, 0.58);
+  --sbc-bg-panel: #f8fafc;
+  --sbc-bg-elevated: #ffffff;
+  --sbc-bg-muted: #f1f5f9;
+  --sbc-bg-subtle: #e2e8f0;
+  --sbc-bg-card: #ffffff;
+  --sbc-bg-card-hover: #f1f5f9;
+  --sbc-bg-card-selected: #eef2ff;
+  --sbc-bg-input: #ffffff;
+
+  --sbc-text-primary: #0f172a;
+  --sbc-text-secondary: #334155;
+  --sbc-text-muted: #475569;
+
+  --sbc-border: #cbd5e1;
+  --sbc-border-strong: #94a3b8;
+  --sbc-border-selected: #4f46e5;
+
+  --sbc-accent: #4f46e5;
+  --sbc-accent-hover: #4338ca;
+  --sbc-accent-soft: rgba(79, 70, 229, 0.12);
+  --sbc-accent-text: #3730a3;
+
+  --sbc-danger: #e11d48;
+  --sbc-danger-hover: #be123c;
+  --sbc-danger-soft: rgba(225, 29, 72, 0.1);
+  --sbc-danger-border: rgba(225, 29, 72, 0.35);
+  --sbc-danger-text: #9f1239;
+
+  --sbc-warning-soft: rgba(217, 119, 6, 0.12);
+  --sbc-warning-border: rgba(217, 119, 6, 0.4);
+  --sbc-warning-text: #92400e;
+
+  --sbc-success-soft: rgba(5, 150, 105, 0.12);
+  --sbc-success-border: rgba(5, 150, 105, 0.38);
+  --sbc-success-text: #065f46;
+
+  --sbc-shadow-modal: 0 24px 60px -12px rgba(15, 23, 42, 0.32);
+  --sbc-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --sbc-shadow-selected: 0 4px 14px rgba(79, 70, 229, 0.2);
+
+  color: var(--sbc-text-primary);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sbc-theme-root[data-theme='dark'] {
+  /* 深邃高对比护眼夜间主题 (Dark Mode) */
+  --sbc-overlay: rgba(2, 6, 23, 0.78);
+  --sbc-bg-panel: #0b1120;
+  --sbc-bg-elevated: #111827;
+  --sbc-bg-muted: #1e293b;
+  --sbc-bg-subtle: #0f172a;
+  --sbc-bg-card: #162033;
+  --sbc-bg-card-hover: #1e2b45;
+  --sbc-bg-card-selected: rgba(99, 102, 241, 0.2);
+  --sbc-bg-input: #090e1a;
+
+  --sbc-text-primary: #f8fafc;
+  --sbc-text-secondary: #cbd5e1;
+  --sbc-text-muted: #94a3b8;
+
+  --sbc-border: #283548;
+  --sbc-border-strong: #475569;
+  --sbc-border-selected: #818cf8;
+
+  --sbc-accent: #4f46e5;
+  --sbc-accent-hover: #6366f1;
+  --sbc-accent-soft: rgba(99, 102, 241, 0.2);
+  --sbc-accent-text: #c7d2fe;
+
+  --sbc-danger: #e11d48;
+  --sbc-danger-hover: #f43f5e;
+  --sbc-danger-soft: rgba(244, 63, 94, 0.16);
+  --sbc-danger-border: rgba(244, 63, 94, 0.42);
+  --sbc-danger-text: #fecdd3;
+
+  --sbc-warning-soft: rgba(245, 158, 11, 0.16);
+  --sbc-warning-border: rgba(245, 158, 11, 0.45);
+  --sbc-warning-text: #fde68a;
+
+  --sbc-success-soft: rgba(16, 185, 129, 0.16);
+  --sbc-success-border: rgba(16, 185, 129, 0.42);
+  --sbc-success-text: #a7f3d0;
+
+  --sbc-shadow-modal: 0 28px 70px -12px rgba(0, 0, 0, 0.78);
+  --sbc-shadow-card: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --sbc-shadow-selected: 0 6px 18px rgba(79, 70, 229, 0.35);
+}
+
+
+/* 语义化背景与文字辅助类 */
+.sbc-backdrop {
+  background-color: var(--sbc-overlay);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.sbc-panel {
+  background-color: var(--sbc-bg-panel);
+  border-color: var(--sbc-border);
+  box-shadow: var(--sbc-shadow-modal);
+}
+
+.sbc-surface-elevated {
+  background-color: var(--sbc-bg-elevated);
+  border-color: var(--sbc-border);
+}
+
+.sbc-surface-muted {
+  background-color: var(--sbc-bg-muted);
+  border-color: var(--sbc-border);
+}
+
+.sbc-surface-subtle {
+  background-color: var(--sbc-bg-subtle);
+  border-color: var(--sbc-border);
+}
+
+.sbc-input {
+  background-color: var(--sbc-bg-input);
+  border: 1.5px solid var(--sbc-border);
+  color: var(--sbc-text-primary);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sbc-input::placeholder {
+  color: var(--sbc-text-muted);
+}
+
+.sbc-input:focus {
+  border-color: var(--sbc-border-selected);
+  box-shadow: 0 0 0 3px var(--sbc-accent-soft);
+  outline: none;
+}
+
+/* 按钮规范 */
+.sbc-btn-secondary {
+  background-color: var(--sbc-bg-elevated);
+  border: 1.5px solid var(--sbc-border);
+  color: var(--sbc-text-primary);
+  transition: all 0.15s ease;
+}
+
+.sbc-btn-secondary:hover:not(:disabled) {
+  background-color: var(--sbc-bg-muted);
+  border-color: var(--sbc-border-strong);
+}
+
+.sbc-btn-primary {
+  background-color: var(--sbc-accent);
+  color: #ffffff;
+  border: 1.5px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.sbc-btn-primary:hover:not(:disabled) {
+  background-color: var(--sbc-accent-hover);
+}
+
+.sbc-btn-danger {
+  background-color: var(--sbc-danger);
+  color: #ffffff;
+  border: 1.5px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.sbc-btn-danger:hover:not(:disabled) {
+  background-color: var(--sbc-danger-hover);
+}
+
+.sbc-btn-accent-soft {
+  background-color: var(--sbc-accent-soft);
+  border: 1.5px solid var(--sbc-border-selected);
+  color: var(--sbc-accent-text);
+  transition: all 0.15s ease;
+}
+
+.sbc-btn-accent-soft:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* 资产卡片状态样式 */
+.sbc-card {
+  background-color: var(--sbc-bg-card);
+  border: 1.5px solid var(--sbc-border);
+  box-shadow: var(--sbc-shadow-card);
+  transition:
+    transform 0.12s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sbc-card:hover:not(.sbc-card-disabled) {
+  background-color: var(--sbc-bg-card-hover);
+  border-color: var(--sbc-border-strong);
+}
+
+.sbc-card-selected {
+  background-color: var(--sbc-bg-card-selected) !important;
+  border-color: var(--sbc-border-selected) !important;
+  box-shadow: var(--sbc-shadow-selected);
+}
+
+.sbc-card-disabled {
+  background-color: var(--sbc-bg-subtle);
+  border-color: var(--sbc-border);
+  opacity: 0.72;
+}
+
+/* 语义化色块与徽章（高对比度易读） */
+.sbc-badge-primary {
+  background-color: var(--sbc-accent-soft);
+  border: 1px solid var(--sbc-border-selected);
+  color: var(--sbc-accent-text);
+}
+
+.sbc-badge-emerald {
+  background-color: var(--sbc-success-soft);
+  border: 1px solid var(--sbc-success-border);
+  color: var(--sbc-success-text);
+}
+
+.sbc-badge-amber {
+  background-color: var(--sbc-warning-soft);
+  border: 1px solid var(--sbc-warning-border);
+  color: var(--sbc-warning-text);
+}
+
+.sbc-badge-rose {
+  background-color: var(--sbc-danger-soft);
+  border: 1px solid var(--sbc-danger-border);
+  color: var(--sbc-danger-text);
+}
+
+.sbc-badge-neutral {
+  background-color: var(--sbc-bg-muted);
+  border: 1px solid var(--sbc-border);
+  color: var(--sbc-text-secondary);
+}
+
+/* 移动端、iOS 与 Android 触控及安全区适配 */
+.sbc-safe-modal {
+  height: 100vh;
+  height: 100dvh;
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+}
+
+@media (max-width: 767px) {
+  .sbc-safe-modal {
+    padding: 0;
+  }
+
+  .sbc-mobile-fullscreen {
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    width: 100vw !important;
+    border-radius: 0 !important;
+    border: none !important;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* 防止 iOS Safari 点击 input 时自动放大页面 */
+  .sbc-input {
+    font-size: 16px !important;
+  }
+
+  /* 移动端最小可点击热区保障 */
+  .sbc-touch-target {
+    min-height: 42px;
+  }
+}
+
+/* 滚动容器优化（支持 iOS 惯性滚动与防穿透） */
+.sbc-scroll-area {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sbc-scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.sbc-scroll-x::-webkit-scrollbar {
+  display: none;
+}
