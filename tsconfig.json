@@ -36,7 +36,10 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
+<<<<<<< HEAD
     "skipLibCheck": true,
+=======
+>>>>>>> fbd0c2c5f019bec7ca3a145029527629c529b4b3
     "forceConsistentCasingInFileNames": true
   },
   "include": [
