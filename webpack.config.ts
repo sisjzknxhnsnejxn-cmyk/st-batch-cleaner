@@ -50,9 +50,14 @@ function common_path(lhs: string, rhs: string) {
 
 function glob_script_files() {
   const results: string[] = [];
+<<<<<<< HEAD
   const pattern = process.env.ONLY_SRC === 'true' ? 'src/**/index.{ts,tsx,js,jsx}' : '{示例,src}/**/index.{ts,tsx,js,jsx}';
 
   fs.globSync(pattern)
+=======
+
+  fs.globSync(`{示例,src}/**/index.{ts,tsx,js,jsx}`)
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
     .filter(
       file => process.env.CI !== 'true' || !fs.readFileSync(path.join(import.meta.dirname, file)).includes('@no-ci'),
     )
@@ -114,7 +119,10 @@ const dump = () => {
 };
 const dump_debounced = _.debounce(dump, 500, { leading: true, trailing: false });
 function schema_dump(compiler: webpack.Compiler) {
+<<<<<<< HEAD
   if (process.env.ONLY_SRC === 'true') return;
+=======
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
   if (!compiler.options.watch) {
     dump_debounced();
     return;
@@ -137,7 +145,10 @@ const bundle = () => {
 };
 const bundle_debounced = _.debounce(bundle, 500, { leading: true, trailing: false });
 function tavern_sync(compiler: webpack.Compiler) {
+<<<<<<< HEAD
   if (process.env.ONLY_SRC === 'true') return;
+=======
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
   if (!compiler.options.watch) {
     bundle_debounced();
     return;
@@ -467,7 +478,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
         new webpack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }),
         new webpack.DefinePlugin({
           __VUE_OPTIONS_API__: false,
+<<<<<<< HEAD
           __VUE_PROD_DEVTOOLS__: false,
+=======
+          __VUE_PROD_DEVTOOLS__: process.env.CI !== 'true',
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
           __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
         }),
       )
@@ -542,10 +557,13 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
         return callback();
       }
 
+<<<<<<< HEAD
       if (['pinia', 'klona', '@vue/devtools-api', 'perfect-debounce', 'hookable', 'birpc'].some(key => request === key || request.startsWith(`${key}/`))) {
         return callback();
       }
 
+=======
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
       if (
         ['vue', 'vue-router'].every(key => request !== key) &&
         ['pixi', 'react', 'vue'].some(key => request.includes(key))
