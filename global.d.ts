@@ -10,6 +10,7 @@ declare module '*.css' {
   const content: unknown;
   export default content;
 }
+<<<<<<< HEAD
 declare module '*.scss' {
   const content: unknown;
   export default content;
@@ -18,6 +19,8 @@ declare module '*.sass' {
   const content: unknown;
   export default content;
 }
+=======
+>>>>>>> cf09cb02c590de46d565966e950150bafcf24c54
 declare module '*.html' {
   const content: string;
   export default content;
@@ -50,5 +53,8 @@ declare module 'https://testingcf.jsdelivr.net/gh/StageDog/tavern_resource/dist/
     schema: z.ZodType<Record<string, any>> | (() => z.ZodType<Record<string, any>>),
   ): void;
 }
+<<<<<<< HEAD
 
 declare module 'https://testingcf.jsdelivr.net/gh/MagicalAstrogy/MagVarUpdate/artifact/bundle.js' {}
+=======
+>>>>>>> cf09cb02c590de46d565966e950150bafcf24c54
